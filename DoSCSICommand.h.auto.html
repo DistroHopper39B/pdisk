@@ -1,0 +1,155 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>DoSCSICommand.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">DoSCSICommand.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="DoSCSICommand.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * DoScsiCommand.h -
+ *
+ * Modifed by Eryk Vershen
+ * from an original by Martin Minow
+ */</span>
+
+<span class="enscript-comment">/*
+ * Copyright 1993-1998 by Apple Computer, Inc.
+ *              All Rights Reserved 
+ *  
+ * Permission to use, copy, modify, and distribute this software and 
+ * its documentation for any purpose and without fee is hereby granted, 
+ * provided that the above copyright notice appears in all copies and 
+ * that both the copyright notice and this permission notice appear in 
+ * supporting documentation. 
+ *  
+ * APPLE COMPUTER DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+ * FOR A PARTICULAR PURPOSE. 
+ *  
+ * IN NO EVENT SHALL APPLE COMPUTER BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+ * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
+ * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
+ * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+ */</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__DoScsiCommand__</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">__DoScsiCommand__</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;SCSI.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;MacSCSICommand.h&quot;</span>
+
+
+<span class="enscript-comment">/*
+ * Defines
+ */</span>
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">EXTERN</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">EXTERN</span>              extern
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">TRUE</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">TRUE</span>                1
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FALSE</span>               0
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">NULL</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">NULL</span>                0
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kOriginalSCSIBusAdaptor</span> (0xFF)
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">SameSCSIDevice</span>(a, b) ((*((UInt32 *) &amp;a)) == (*((UInt32 *) &amp;b)))
+
+<span class="enscript-comment">/*
+ * Cheap 'n dirty memory clear routine.
+ */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">CLEAR</span>(dst)          clear_memory((void *) &amp;dst, sizeof dst)
+
+
+<span class="enscript-comment">/*
+ * Types
+ */</span>
+#<span class="enscript-reference">if</span> !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__NewTypesDefined__</span>)
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">__NewTypesDefined__</span>
+<span class="enscript-type">typedef</span> <span class="enscript-type">signed</span> <span class="enscript-type">char</span>     SInt8;
+<span class="enscript-type">typedef</span> <span class="enscript-type">signed</span> <span class="enscript-type">short</span>    SInt16;
+<span class="enscript-type">typedef</span> <span class="enscript-type">signed</span> <span class="enscript-type">long</span>     SInt32;
+<span class="enscript-type">typedef</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>   UInt8;
+<span class="enscript-type">typedef</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">short</span>  UInt16;
+<span class="enscript-type">typedef</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>   UInt32;
+<span class="enscript-type">typedef</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>   ItemCount;
+<span class="enscript-type">typedef</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>   ByteCount;
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">/*
+ * Global Constants
+ */</span>
+<span class="enscript-type">enum</span> {
+    bit0 = (1 &lt;&lt; 0),
+    bit1 = (1 &lt;&lt; 1),
+    bit2 = (1 &lt;&lt; 2),
+    bit3 = (1 &lt;&lt; 3),
+    bit4 = (1 &lt;&lt; 4),
+    bit5 = (1 &lt;&lt; 5),
+    bit6 = (1 &lt;&lt; 6),
+    bit7 = (1 &lt;&lt; 7)
+};
+
+
+<span class="enscript-comment">/*
+ * Global Variables
+ */</span>
+EXTERN <span class="enscript-type">int</span>				gSCSIHiBusID;
+EXTERN SCSIExecIOPB     *gSCSIExecIOPBPtr;
+EXTERN UInt32           gSCSIExecIOPBPtrLen;
+
+
+<span class="enscript-comment">/*
+ * Forward declarations
+ */</span>
+<span class="enscript-type">void</span> <span class="enscript-function-name">AllocatePB</span>();
+Boolean <span class="enscript-function-name">IsIllegalRequest</span>(OSErr scsiStatus, <span class="enscript-type">const</span> SCSI_Sense_Data *senseDataPtr);
+Boolean <span class="enscript-function-name">IsNoMedia</span>(OSErr scsiStatus, <span class="enscript-type">const</span> SCSI_Sense_Data *senseDataPtr);
+<span class="enscript-comment">/*
+ * All SCSI Commands come here.
+ *  if scsiDevice.busID == kOriginalSCSIBusAdaptor, IM-IV SCSI will be called.
+ *  scsiFlags should be scsiDirectionNone, scsiDirectionIn, or scsiDirectionOut
+ *  actualTransferCount may be NULL if you don't care.
+ *  Both old and new SCSI return SCSI Manager 4.3 errors.
+ *
+ * DoSCSICommand throws really serious errors, but returns SCSI errors such
+ * as dataRunError and scsiDeviceNotThere.
+ */</span>
+OSErr <span class="enscript-function-name">DoSCSICommand</span>(
+	DeviceIdent             scsiDevice,
+	ConstStr255Param        currentAction,
+	<span class="enscript-type">const</span> SCSI_CommandPtr   callerSCSICommand,
+	Ptr                     dataBuffer,
+	ByteCount               dataLength,
+	UInt32                  scsiFlags,
+	ByteCount               *actualTransferCount,
+	SCSI_Sense_Data         *sensePtr,
+	StringPtr               senseMessage
+);
+
+
+#<span class="enscript-reference">endif</span> <span class="enscript-comment">/* __DoScsiCommand__ */</span>
+</pre>
+<hr />
+</body></html>

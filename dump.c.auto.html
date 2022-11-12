@@ -1,0 +1,989 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>dump.c</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">dump.c&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="dump.c">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// dump.c - dumping partition maps
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// Written by Eryk Vershen
+</span><span class="enscript-comment">//
+</span>
+<span class="enscript-comment">/*
+ * Copyright 1996,1997,1998 by Apple Computer, Inc.
+ *              All Rights Reserved 
+ *  
+ * Permission to use, copy, modify, and distribute this software and 
+ * its documentation for any purpose and without fee is hereby granted, 
+ * provided that the above copyright notice appears in all copies and 
+ * that both the copyright notice and this permission notice appear in 
+ * supporting documentation. 
+ *  
+ * APPLE COMPUTER DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+ * FOR A PARTICULAR PURPOSE. 
+ *  
+ * IN NO EVENT SHALL APPLE COMPUTER BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+ * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
+ * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
+ * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+ */</span>
+
+<span class="enscript-comment">// for *printf()
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdio.h&gt;</span>
+
+<span class="enscript-comment">// for malloc() &amp; free()
+</span>#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__linux__</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdlib.h&gt;</span>
+<span class="enscript-comment">//#include &lt;unistd.h&gt;
+</span>#<span class="enscript-reference">else</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;malloc.h&gt;</span>
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// for strcmp()
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;string.h&gt;</span>
+<span class="enscript-comment">// for O_RDONLY
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;fcntl.h&gt;</span>
+<span class="enscript-comment">// for errno
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;errno.h&gt;</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;dump.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;pathname.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;io.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;errors.h&quot;</span>
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__APPLE__</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;CoreFoundation/CoreFoundation.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/IOBSD.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/IOKitLib.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/storage/IOMedia.h&gt;</span>
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Defines
+</span><span class="enscript-comment">//
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">DPISTRLEN</span> != 32
+#<span class="enscript-reference">error</span> <span class="enscript-variable-name">Change</span> <span class="enscript-variable-name">in</span> <span class="enscript-variable-name">strlen</span> <span class="enscript-variable-name">in</span> <span class="enscript-variable-name">partition</span> <span class="enscript-variable-name">entries</span>! <span class="enscript-variable-name">Fix</span> <span class="enscript-variable-name">constants</span>
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">get_align_long</span>(x)	(*(x))
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Types
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> names {
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *abbr;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *full;
+} NAMES;
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> PatchDescriptor {
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>	patchSig;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">short</span>	majorVers;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">short</span>	minorVers;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>	flags;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>	patchOffset;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>	patchSize;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>	patchCRC;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>	patchDescriptorLen;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>	patchName[33];
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>	patchVendor[1];
+} PatchDescriptor;
+<span class="enscript-type">typedef</span> PatchDescriptor * PatchDescriptorPtr;
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> PatchList {
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">short</span> numPatchBlocks;	<span class="enscript-comment">// number of disk blocks to hold the patch list
+</span>    <span class="enscript-type">unsigned</span> <span class="enscript-type">short</span> numPatches;		<span class="enscript-comment">// number of patches in list
+</span>    PatchDescriptor thePatch[1];
+} PatchList;
+<span class="enscript-type">typedef</span> PatchList *PatchListPtr;
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Constants
+</span><span class="enscript-comment">//
+</span>NAMES plist[] = {
+    {<span class="enscript-string">&quot;Drvr&quot;</span>, <span class="enscript-string">&quot;Apple_Driver&quot;</span>},
+    {<span class="enscript-string">&quot;Drv4&quot;</span>, <span class="enscript-string">&quot;Apple_Driver43&quot;</span>},
+    {<span class="enscript-string">&quot;Free&quot;</span>, <span class="enscript-string">&quot;Apple_Free&quot;</span>},
+    {<span class="enscript-string">&quot;Patc&quot;</span>, <span class="enscript-string">&quot;Apple_Patches&quot;</span>},
+    {<span class="enscript-string">&quot; HFS&quot;</span>, <span class="enscript-string">&quot;Apple_HFS&quot;</span>},
+    {<span class="enscript-string">&quot; MFS&quot;</span>, <span class="enscript-string">&quot;Apple_MFS&quot;</span>},
+    {<span class="enscript-string">&quot;PDOS&quot;</span>, <span class="enscript-string">&quot;Apple_PRODOS&quot;</span>},
+    {<span class="enscript-string">&quot;junk&quot;</span>, <span class="enscript-string">&quot;Apple_Scratch&quot;</span>},
+    {<span class="enscript-string">&quot;unix&quot;</span>, <span class="enscript-string">&quot;Apple_UNIX_SVR2&quot;</span>},
+    {<span class="enscript-string">&quot; map&quot;</span>, <span class="enscript-string">&quot;Apple_partition_map&quot;</span>},
+    {0,	0},
+};
+
+<span class="enscript-type">const</span> <span class="enscript-type">char</span> * kStringEmpty	= <span class="enscript-string">&quot;&quot;</span>;
+<span class="enscript-type">const</span> <span class="enscript-type">char</span> * kStringNot		= <span class="enscript-string">&quot; not&quot;</span>;
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Variables
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">int</span> aflag = AFLAG_DEFAULT;	<span class="enscript-comment">/* abbreviate partition types */</span>
+<span class="enscript-type">int</span> pflag = PFLAG_DEFAULT;	<span class="enscript-comment">/* show physical limits of partition */</span>
+<span class="enscript-type">int</span> fflag = FFLAG_DEFAULT;	<span class="enscript-comment">/* show HFS volume names */</span>
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Forward declarations
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">void</span> <span class="enscript-function-name">adjust_value_and_compute_prefix</span>(<span class="enscript-type">double</span> *value, <span class="enscript-type">int</span> *prefix);
+<span class="enscript-type">void</span> <span class="enscript-function-name">dump_block_zero</span>(partition_map_header *map);
+<span class="enscript-type">void</span> <span class="enscript-function-name">dump_partition_entry</span>(partition_map *entry, <span class="enscript-type">int</span> type_length, <span class="enscript-type">int</span> name_length, <span class="enscript-type">int</span> digits);
+<span class="enscript-type">int</span> <span class="enscript-function-name">get_max_base_or_length</span>(partition_map_header *map);
+<span class="enscript-type">int</span> <span class="enscript-function-name">get_max_name_string_length</span>(partition_map_header *map);
+<span class="enscript-type">int</span> <span class="enscript-function-name">get_max_type_string_length</span>(partition_map_header *map);
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Routines
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">int</span>
+<span class="enscript-function-name">dump</span>(<span class="enscript-type">char</span> *name)
+{
+    partition_map_header *map;
+    <span class="enscript-type">int</span> junk;
+
+    map = open_partition_map(name, &amp;junk, 0, O_RDONLY);
+    <span class="enscript-keyword">if</span> (map == NULL) {
+	<span class="enscript-comment">//error(-1, &quot;No partition map in '%s'&quot;, name);
+</span>	<span class="enscript-keyword">return</span> 0;
+    }
+
+    dump_partition_map(map, 1);
+
+    close_partition_map(map);
+    
+    <span class="enscript-keyword">return</span> 1;
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">dump_block_zero</span>(partition_map_header *map)
+{
+    Block0 *p;
+    DDMap *m;
+    <span class="enscript-type">int</span> i;
+    <span class="enscript-type">double</span> value;
+    <span class="enscript-type">int</span> prefix;
+    <span class="enscript-type">long</span> t;
+
+    p = map-&gt;misc;
+    <span class="enscript-keyword">if</span> (p-&gt;sbSig != BLOCK0_SIGNATURE) {
+	<span class="enscript-keyword">return</span>;
+    }
+
+    value = ((<span class="enscript-type">double</span>)p-&gt;sbBlkCount) * p-&gt;sbBlkSize;
+    adjust_value_and_compute_prefix(&amp;value, &amp;prefix);
+    printf(<span class="enscript-string">&quot;\nDevice block size=%u, Number of Blocks=%u (%1.1f%c)\n&quot;</span>,
+	    p-&gt;sbBlkSize, p-&gt;sbBlkCount, value, prefix);
+
+    printf(<span class="enscript-string">&quot;DeviceType=0x%x, DeviceId=0x%x\n&quot;</span>,
+	    p-&gt;sbDevType, p-&gt;sbDevId);
+    <span class="enscript-keyword">if</span> (p-&gt;sbDrvrCount &gt; 0) {
+	printf(<span class="enscript-string">&quot;Drivers-\n&quot;</span>);
+	m = (DDMap *) p-&gt;sbMap;
+	<span class="enscript-keyword">for</span> (i = 0; i &lt; p-&gt;sbDrvrCount; i++) {
+	    printf(<span class="enscript-string">&quot;%u: %3u @ %u, &quot;</span>, i+1,
+		    m[i].ddSize, get_align_long(&amp;m[i].ddBlock));
+	    <span class="enscript-keyword">if</span> (map-&gt;logical_block != p-&gt;sbBlkSize) {
+		t = (m[i].ddSize * p-&gt;sbBlkSize) / map-&gt;logical_block;
+		printf(<span class="enscript-string">&quot;(%lu@&quot;</span>, t);
+		t = (get_align_long(&amp;m[i].ddBlock) * p-&gt;sbBlkSize)
+			/ map-&gt;logical_block;
+		printf(<span class="enscript-string">&quot;%lu)  &quot;</span>, t);
+	    }
+	    printf(<span class="enscript-string">&quot;type=0x%x\n&quot;</span>, m[i].ddType);
+	}
+    }
+    printf(<span class="enscript-string">&quot;\n&quot;</span>);
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">dump_partition_map</span>(partition_map_header *map, <span class="enscript-type">int</span> disk_order)
+{
+    partition_map * entry;
+    <span class="enscript-type">int</span> max_type_length;
+    <span class="enscript-type">int</span> max_name_length;
+    <span class="enscript-type">int</span> digits;
+    <span class="enscript-type">char</span> *alternate;
+
+    <span class="enscript-keyword">if</span> (map == NULL) {
+	bad_input(<span class="enscript-string">&quot;No partition map exists&quot;</span>);
+	<span class="enscript-keyword">return</span>;
+    }
+    alternate = get_linux_name(map-&gt;name);
+    <span class="enscript-keyword">if</span> (alternate) {
+	printf(<span class="enscript-string">&quot;\nPartition map (with %d byte blocks) on '%s' (%s)\n&quot;</span>,
+		map-&gt;logical_block, map-&gt;name, alternate);
+	free(alternate);
+    } <span class="enscript-keyword">else</span> {
+	printf(<span class="enscript-string">&quot;\nPartition map (with %d byte blocks) on '%s'\n&quot;</span>,
+		map-&gt;logical_block, map-&gt;name);
+    }
+
+    digits = number_of_digits(get_max_base_or_length(map));
+    <span class="enscript-keyword">if</span> (digits &lt; 6) {
+	digits = 6;
+    }
+    <span class="enscript-keyword">if</span> (aflag) {
+	max_type_length = 4;
+    } <span class="enscript-keyword">else</span> {
+	max_type_length = get_max_type_string_length(map);
+	<span class="enscript-keyword">if</span> (max_type_length &lt; 4) {
+	    max_type_length = 4;
+	}
+    }
+    max_name_length = get_max_name_string_length(map);
+    <span class="enscript-keyword">if</span> (max_name_length &lt; 6) {
+	max_name_length = 6;
+    }
+    printf(<span class="enscript-string">&quot; #: %*s %-*s %*s   %-*s ( size )\n&quot;</span>,
+	    max_type_length, <span class="enscript-string">&quot;type&quot;</span>,
+	    max_name_length, <span class="enscript-string">&quot;name&quot;</span>,
+	    digits, <span class="enscript-string">&quot;length&quot;</span>, digits, <span class="enscript-string">&quot;base&quot;</span>);
+
+    <span class="enscript-keyword">if</span> (disk_order) {
+	<span class="enscript-keyword">for</span> (entry = map-&gt;disk_order; entry != NULL;
+		entry = entry-&gt;next_on_disk) {
+
+	    dump_partition_entry(entry, max_type_length, max_name_length, digits);
+	}
+    } <span class="enscript-keyword">else</span> {
+	<span class="enscript-keyword">for</span> (entry = map-&gt;base_order; entry != NULL;
+		entry = entry-&gt;next_by_base) {
+
+	    dump_partition_entry(entry, max_type_length, max_name_length, digits);
+	}
+    }
+    dump_block_zero(map);
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">dump_partition_entry</span>(partition_map *entry, <span class="enscript-type">int</span> type_length, <span class="enscript-type">int</span> name_length, <span class="enscript-type">int</span> digits)
+{
+    partition_map_header *map;
+    <span class="enscript-type">int</span> j;
+    DPME *p;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *s;
+    u32 size;
+    <span class="enscript-type">double</span> bytes;
+    <span class="enscript-type">int</span> driver;
+    <span class="enscript-comment">// int kind;
+</span>    <span class="enscript-type">char</span> *buf;
+#<span class="enscript-reference">if</span> 1
+    BZB *bp;
+#<span class="enscript-reference">endif</span>
+
+    map = entry-&gt;the_map;
+    p = entry-&gt;data;
+    driver = entry-&gt;contains_driver? <span class="enscript-string">'*'</span>: <span class="enscript-string">' '</span>;
+    <span class="enscript-keyword">if</span> (aflag) {
+	s = <span class="enscript-string">&quot;????&quot;</span>;
+	<span class="enscript-keyword">for</span> (j = 0; plist[j].abbr != 0; j++) {
+	    <span class="enscript-keyword">if</span> (strcmp(p-&gt;dpme_type, plist[j].full) == 0) {
+		s = plist[j].abbr;
+		<span class="enscript-keyword">break</span>;
+	    }
+	}
+	printf(<span class="enscript-string">&quot;%2ld: %.4s&quot;</span>, entry-&gt;disk_address, s);
+    } <span class="enscript-keyword">else</span> {
+	printf(<span class="enscript-string">&quot;%2ld: %*.32s&quot;</span>, entry-&gt;disk_address, type_length, p-&gt;dpme_type);
+    }
+
+    buf = (<span class="enscript-type">char</span> *) malloc(name_length+1);
+    <span class="enscript-keyword">if</span> (entry-&gt;HFS_name == NULL || fflag == 0) {
+	strncpy(buf, p-&gt;dpme_name, name_length);
+	buf[name_length] = 0;
+    } <span class="enscript-keyword">else</span> {
+	snprintf(buf, name_length + 1, <span class="enscript-string">&quot;\&quot;%s\&quot;&quot;</span>, entry-&gt;HFS_name);
+    }
+    printf(<span class="enscript-string">&quot;%c%-*.32s &quot;</span>, driver, name_length, buf);
+    free(buf);
+    <span class="enscript-comment">/*
+    switch (entry-&gt;HFS_kind) {
+    case kHFS_std:	kind = 'h'; break;
+    case kHFS_embed:	kind = 'e'; break;
+    case kHFS_plus:	kind = '+'; break;
+    default:
+    case kHFS_not:	kind = ' '; break;
+    }
+    printf(&quot;%c &quot;, kind);
+    */</span>
+
+    <span class="enscript-keyword">if</span> (pflag) {
+	printf(<span class="enscript-string">&quot;%*u &quot;</span>, digits, p-&gt;dpme_pblocks);
+	size = p-&gt;dpme_pblocks;
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (p-&gt;dpme_lblocks + p-&gt;dpme_lblock_start != p-&gt;dpme_pblocks) {
+	printf(<span class="enscript-string">&quot;%*u+&quot;</span>, digits, p-&gt;dpme_lblocks);
+	size = p-&gt;dpme_lblocks;
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (p-&gt;dpme_lblock_start != 0) {
+	printf(<span class="enscript-string">&quot;%*u &quot;</span>, digits, p-&gt;dpme_lblocks);
+	size = p-&gt;dpme_lblocks;
+    } <span class="enscript-keyword">else</span> {
+	printf(<span class="enscript-string">&quot;%*u &quot;</span>, digits, p-&gt;dpme_pblocks);
+	size = p-&gt;dpme_pblocks;
+    }
+    <span class="enscript-keyword">if</span> (pflag || p-&gt;dpme_lblock_start == 0) {
+	printf(<span class="enscript-string">&quot;@ %-*u&quot;</span>, digits, p-&gt;dpme_pblock_start);
+    } <span class="enscript-keyword">else</span> {
+	printf(<span class="enscript-string">&quot;@~%-*u&quot;</span>, digits, p-&gt;dpme_pblock_start + p-&gt;dpme_lblock_start);
+    }
+    
+    bytes = ((<span class="enscript-type">double</span>)size) * map-&gt;logical_block;
+    adjust_value_and_compute_prefix(&amp;bytes, &amp;j);
+    <span class="enscript-keyword">if</span> (j != <span class="enscript-string">' '</span> &amp;&amp; j != <span class="enscript-string">'K'</span>) {
+	printf(<span class="enscript-string">&quot; (%#5.1f%c)&quot;</span>, bytes, j);
+    }
+
+#<span class="enscript-reference">if</span> 1
+    <span class="enscript-comment">// Old A/UX fields that no one pays attention to anymore.
+</span>    bp = (BZB *) (p-&gt;dpme_bzb);
+    j = -1;
+    <span class="enscript-keyword">if</span> (bp-&gt;bzb_magic == BZBMAGIC) {
+	<span class="enscript-keyword">switch</span> (bp-&gt;bzb_type) {
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">FSTEFS</span>:
+	    s = <span class="enscript-string">&quot;EFS&quot;</span>;
+	    <span class="enscript-keyword">break</span>;
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">FSTSFS</span>:
+	    s = <span class="enscript-string">&quot;SFS&quot;</span>;
+	    j = 1;
+	    <span class="enscript-keyword">break</span>;
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">FST</span>:
+	<span class="enscript-reference">default</span>:
+	    <span class="enscript-keyword">if</span> (bzb_root_get(bp) != 0) {
+		<span class="enscript-keyword">if</span> (bzb_usr_get(bp) != 0) {
+		    s = <span class="enscript-string">&quot;RUFS&quot;</span>;
+		} <span class="enscript-keyword">else</span> {
+		    s = <span class="enscript-string">&quot;RFS&quot;</span>;
+		}
+		j = 0;
+	    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (bzb_usr_get(bp) != 0) {
+		s = <span class="enscript-string">&quot;UFS&quot;</span>;
+		j = 2;
+	    } <span class="enscript-keyword">else</span> {
+		s = <span class="enscript-string">&quot;FS&quot;</span>;
+	    }
+	    <span class="enscript-keyword">break</span>;
+	}
+	<span class="enscript-keyword">if</span> (bzb_slice_get(bp) != 0) {
+	    printf(<span class="enscript-string">&quot; s%1d %4s&quot;</span>, bzb_slice_get(bp)-1, s);
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (j &gt;= 0) {
+	    printf(<span class="enscript-string">&quot; S%1d %4s&quot;</span>, j, s);
+	} <span class="enscript-keyword">else</span> {
+	    printf(<span class="enscript-string">&quot;    %4s&quot;</span>, s);
+	}
+	<span class="enscript-keyword">if</span> (bzb_crit_get(bp) != 0) {
+	    printf(<span class="enscript-string">&quot; K%1d&quot;</span>, bp-&gt;bzb_cluster);
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (j &lt; 0) {
+	    printf(<span class="enscript-string">&quot;   &quot;</span>);
+	} <span class="enscript-keyword">else</span> {
+	    printf(<span class="enscript-string">&quot; k%1d&quot;</span>, bp-&gt;bzb_cluster);
+	}
+	<span class="enscript-keyword">if</span> (bp-&gt;bzb_mount_point[0] != 0) {
+	    printf(<span class="enscript-string">&quot;  %.64s&quot;</span>, bp-&gt;bzb_mount_point);
+	}
+    }
+#<span class="enscript-reference">endif</span>
+    printf(<span class="enscript-string">&quot;\n&quot;</span>);
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">list_all_disks</span>()
+{
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__APPLE__</span>
+  <span class="enscript-type">char</span> name[20] = <span class="enscript-string">&quot;/dev/r&quot;</span>;
+    MEDIA m;
+    DPME * data;
+    CFMutableDictionaryRef matching = NULL;
+    kern_return_t ret;
+    io_iterator_t iterator;
+    io_service_t media;
+
+    data = (DPME *) malloc(PBLOCK_SIZE);
+    <span class="enscript-keyword">if</span> (data == NULL) {
+	error(errno, <span class="enscript-string">&quot;can't allocate memory for try buffer&quot;</span>);
+	<span class="enscript-keyword">return</span>;
+    }
+
+    matching = IOServiceMatching(kIOMediaClass);
+    CFDictionaryAddValue(matching, CFSTR(kIOMediaWholeKey), kCFBooleanTrue);
+
+    ret = IOServiceGetMatchingServices(kIOMasterPortDefault,
+				       matching,
+				       &amp;iterator);
+
+    <span class="enscript-keyword">if</span>(ret != KERN_SUCCESS) {
+      free(data);
+      <span class="enscript-keyword">return</span>;
+    }
+
+    <span class="enscript-keyword">while</span>((media = IOIteratorNext(iterator))) {
+      CFStringRef blockdev;
+
+      blockdev = IORegistryEntryCreateCFProperty(media,
+						 CFSTR(kIOBSDNameKey),
+						 kCFAllocatorDefault,
+						 0);
+      <span class="enscript-keyword">if</span>(blockdev) {
+	
+	<span class="enscript-keyword">if</span>(CFStringGetCString(blockdev, name+<span class="enscript-keyword">sizeof</span>(<span class="enscript-string">&quot;/dev/r&quot;</span>)-1,
+			      <span class="enscript-keyword">sizeof</span>(name)-<span class="enscript-keyword">sizeof</span>(<span class="enscript-string">&quot;/dev/r&quot;</span>)+1,
+			      kCFStringEncodingUTF8)) {
+
+	  <span class="enscript-keyword">if</span> ((m = open_pathname_as_media(name, O_RDONLY)) == 0) {
+	    error(errno, <span class="enscript-string">&quot;can't open file '%s'&quot;</span>, name);
+	  } <span class="enscript-keyword">else</span> {
+	    close_media(m);
+	  }
+	  dump(name);
+	}
+	CFRelease(blockdev);
+      }
+      IOObjectRelease(media);
+    }
+
+    IOObjectRelease(iterator);
+
+    free(data);
+#<span class="enscript-reference">else</span>
+    MEDIA_ITERATOR iter;
+    MEDIA m;
+    DPME * data;
+    <span class="enscript-type">char</span> *name;
+    <span class="enscript-type">long</span> mark;
+
+    data = (DPME *) malloc(PBLOCK_SIZE);
+    <span class="enscript-keyword">if</span> (data == NULL) {
+	error(errno, <span class="enscript-string">&quot;can't allocate memory for try buffer&quot;</span>);
+	<span class="enscript-keyword">return</span>;
+    }
+    
+    <span class="enscript-keyword">for</span> (iter = first_media_kind(&amp;mark); iter != 0; iter = next_media_kind(&amp;mark)) {
+
+    	<span class="enscript-keyword">while</span> ((name = step_media_iterator(iter)) != 0) {
+
+	    <span class="enscript-keyword">if</span> ((m = open_pathname_as_media(name, O_RDONLY)) == 0) {
+#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__linux__</span>) || <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__unix__</span>)
+		error(errno, <span class="enscript-string">&quot;can't open file '%s'&quot;</span>, name);
+#<span class="enscript-reference">endif</span>
+	    } <span class="enscript-keyword">else</span> {
+		close_media(m);
+
+		dump(name);
+	    }
+	    free(name);
+	}
+
+	delete_media_iterator(iter);
+    }
+
+    free(data);
+#<span class="enscript-reference">endif</span>
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">show_data_structures</span>(partition_map_header *map)
+{
+    Block0 *zp;
+    DDMap *m;
+    <span class="enscript-type">int</span> i;
+    <span class="enscript-type">int</span> j;
+    partition_map * entry;
+    DPME *p;
+    BZB *bp;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *s;
+
+    <span class="enscript-keyword">if</span> (map == NULL) {
+	printf(<span class="enscript-string">&quot;No partition map exists\n&quot;</span>);
+	<span class="enscript-keyword">return</span>;
+    }
+    printf(<span class="enscript-string">&quot;Header:\n&quot;</span>);
+    printf(<span class="enscript-string">&quot;map %d blocks out of %d,  media %lu blocks (%d byte blocks)\n&quot;</span>,
+	    map-&gt;blocks_in_map, map-&gt;maximum_in_map,
+	    map-&gt;media_size, map-&gt;logical_block);
+    printf(<span class="enscript-string">&quot;Map is%s writable&quot;</span>, (map-&gt;writable)?kStringEmpty:kStringNot);
+    printf(<span class="enscript-string">&quot;, but%s changed&quot;</span>, (map-&gt;changed)?kStringEmpty:kStringNot);
+    printf(<span class="enscript-string">&quot; and has%s been written\n&quot;</span>, (map-&gt;written)?kStringEmpty:kStringNot);
+    printf(<span class="enscript-string">&quot;\n&quot;</span>);
+
+    <span class="enscript-keyword">if</span> (map-&gt;misc == NULL) {
+	printf(<span class="enscript-string">&quot;No block zero\n&quot;</span>);
+    } <span class="enscript-keyword">else</span> {
+	zp = map-&gt;misc;
+
+	printf(<span class="enscript-string">&quot;Block0:\n&quot;</span>);
+	printf(<span class="enscript-string">&quot;signature 0x%x&quot;</span>, zp-&gt;sbSig);
+	<span class="enscript-keyword">if</span> (zp-&gt;sbSig == BLOCK0_SIGNATURE) {
+	    printf(<span class="enscript-string">&quot;\n&quot;</span>);
+	} <span class="enscript-keyword">else</span> {
+	    printf(<span class="enscript-string">&quot; should be 0x%x\n&quot;</span>, BLOCK0_SIGNATURE);
+	}
+	printf(<span class="enscript-string">&quot;Block size=%u, Number of Blocks=%u\n&quot;</span>,
+		zp-&gt;sbBlkSize, zp-&gt;sbBlkCount);
+	printf(<span class="enscript-string">&quot;DeviceType=0x%x, DeviceId=0x%x, sbData=0x%x\n&quot;</span>,
+		zp-&gt;sbDevType, zp-&gt;sbDevId, zp-&gt;sbData);
+	<span class="enscript-keyword">if</span> (zp-&gt;sbDrvrCount == 0) {
+	    printf(<span class="enscript-string">&quot;No drivers\n&quot;</span>);
+	} <span class="enscript-keyword">else</span> {
+	    printf(<span class="enscript-string">&quot;%u driver%s-\n&quot;</span>, zp-&gt;sbDrvrCount,
+		    (zp-&gt;sbDrvrCount&gt;1)?<span class="enscript-string">&quot;s&quot;</span>:kStringEmpty);
+	    m = (DDMap *) zp-&gt;sbMap;
+	    <span class="enscript-keyword">for</span> (i = 0; i &lt; zp-&gt;sbDrvrCount; i++) {
+            printf(<span class="enscript-string">&quot;%u: @ %u for %u, type=0x%x\n&quot;</span>, i+1, 
+		   get_align_long(&amp;m[i].ddBlock),
+		   m[i].ddSize, m[i].ddType);
+	    }
+	}
+    }
+    printf(<span class="enscript-string">&quot;\n&quot;</span>);
+
+<span class="enscript-comment">/*
+u32     dpme_boot_args[32]      ;
+u32     dpme_reserved_3[62]     ;
+*/</span>
+    printf(<span class="enscript-string">&quot; #:                 type  length   base    &quot;</span>
+	    <span class="enscript-string">&quot;flags        (logical)\n&quot;</span>);
+    <span class="enscript-keyword">for</span> (entry = map-&gt;disk_order; entry != NULL; entry = entry-&gt;next_on_disk) {
+	p = entry-&gt;data;
+	printf(<span class="enscript-string">&quot;%2ld: %20.32s &quot;</span>,
+		entry-&gt;disk_address, p-&gt;dpme_type);
+	printf(<span class="enscript-string">&quot;%7u @ %-7u &quot;</span>, p-&gt;dpme_pblocks, p-&gt;dpme_pblock_start);
+	printf(<span class="enscript-string">&quot;%c%c%c%c%c%c%c%c%c%c%c%c &quot;</span>,
+		(dpme_valid_get(p))?<span class="enscript-string">'V'</span>:<span class="enscript-string">'.'</span>,
+		(dpme_allocated_get(p))?<span class="enscript-string">'A'</span>:<span class="enscript-string">'.'</span>,
+		(dpme_in_use_get(p))?<span class="enscript-string">'I'</span>:<span class="enscript-string">'.'</span>,
+		(dpme_bootable_get(p))?<span class="enscript-string">'B'</span>:<span class="enscript-string">'.'</span>,
+		(dpme_readable_get(p))?<span class="enscript-string">'R'</span>:<span class="enscript-string">'.'</span>,
+		(dpme_writable_get(p))?<span class="enscript-string">'W'</span>:<span class="enscript-string">'.'</span>,
+		(dpme_os_pic_code_get(p))?<span class="enscript-string">'P'</span>:<span class="enscript-string">'.'</span>,
+		(dpme_os_specific_2_get(p))?<span class="enscript-string">'2'</span>:<span class="enscript-string">'.'</span>,
+		(dpme_chainable_get(p))?<span class="enscript-string">'C'</span>:<span class="enscript-string">'.'</span>,
+		(dpme_diskdriver_get(p))?<span class="enscript-string">'D'</span>:<span class="enscript-string">'.'</span>,
+		(bitfield_get(p-&gt;dpme_flags, 30, 1))?<span class="enscript-string">'M'</span>:<span class="enscript-string">'.'</span>,
+		(bitfield_get(p-&gt;dpme_flags, 31, 1))?<span class="enscript-string">'X'</span>:<span class="enscript-string">'.'</span>);
+	<span class="enscript-keyword">if</span> (p-&gt;dpme_lblock_start != 0 || p-&gt;dpme_pblocks != p-&gt;dpme_lblocks) {
+	    printf(<span class="enscript-string">&quot;(%u @ %u)&quot;</span>, p-&gt;dpme_lblocks, p-&gt;dpme_lblock_start);
+	}
+	printf(<span class="enscript-string">&quot;\n&quot;</span>);
+    }
+    printf(<span class="enscript-string">&quot;\n&quot;</span>);
+    printf(<span class="enscript-string">&quot; #:  booter   bytes      load_address      &quot;</span>
+	    <span class="enscript-string">&quot;goto_address checksum processor\n&quot;</span>);
+    <span class="enscript-keyword">for</span> (entry = map-&gt;disk_order; entry != NULL; entry = entry-&gt;next_on_disk) {
+	p = entry-&gt;data;
+	printf(<span class="enscript-string">&quot;%2ld: &quot;</span>, entry-&gt;disk_address);
+	printf(<span class="enscript-string">&quot;%7u &quot;</span>, p-&gt;dpme_boot_block);
+	printf(<span class="enscript-string">&quot;%7u &quot;</span>, p-&gt;dpme_boot_bytes);
+	printf(<span class="enscript-string">&quot;%8x &quot;</span>, (u32)p-&gt;dpme_load_addr);
+	printf(<span class="enscript-string">&quot;%8x &quot;</span>, (u32)p-&gt;dpme_load_addr_2);
+	printf(<span class="enscript-string">&quot;%8x &quot;</span>, (u32)p-&gt;dpme_goto_addr);
+	printf(<span class="enscript-string">&quot;%8x &quot;</span>, (u32)p-&gt;dpme_goto_addr_2);
+	printf(<span class="enscript-string">&quot;%8x &quot;</span>, p-&gt;dpme_checksum);
+	printf(<span class="enscript-string">&quot;%.32s&quot;</span>, p-&gt;dpme_process_id);
+	printf(<span class="enscript-string">&quot;\n&quot;</span>);
+    }
+    printf(<span class="enscript-string">&quot;\n&quot;</span>);
+<span class="enscript-comment">/*
+xx: cccc RU *dd s...
+*/</span>
+    printf(<span class="enscript-string">&quot; #: type RU *slice mount_point (A/UX only fields)\n&quot;</span>);
+    <span class="enscript-keyword">for</span> (entry = map-&gt;disk_order; entry != NULL; entry = entry-&gt;next_on_disk) {
+	p = entry-&gt;data;
+	printf(<span class="enscript-string">&quot;%2ld: &quot;</span>, entry-&gt;disk_address);
+
+	bp = (BZB *) (p-&gt;dpme_bzb);
+	j = -1;
+	<span class="enscript-keyword">if</span> (bp-&gt;bzb_magic == BZBMAGIC) {
+	    <span class="enscript-keyword">switch</span> (bp-&gt;bzb_type) {
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">FSTEFS</span>:
+		s = <span class="enscript-string">&quot;esch&quot;</span>;
+		<span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">FSTSFS</span>:
+		s = <span class="enscript-string">&quot;swap&quot;</span>;
+		j = 1;
+		<span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">FST</span>:
+	    <span class="enscript-reference">default</span>:
+		s = <span class="enscript-string">&quot;fsys&quot;</span>;
+		<span class="enscript-keyword">if</span> (bzb_root_get(bp) != 0) {
+		    j = 0;
+		} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (bzb_usr_get(bp) != 0) {
+		    j = 2;
+		}
+		<span class="enscript-keyword">break</span>;
+	    }
+	    printf(<span class="enscript-string">&quot;%4s &quot;</span>, s);
+	    printf(<span class="enscript-string">&quot;%c%c &quot;</span>,
+		    (bzb_root_get(bp))?<span class="enscript-string">'R'</span>:<span class="enscript-string">' '</span>,
+		    (bzb_usr_get(bp))?<span class="enscript-string">'U'</span>:<span class="enscript-string">' '</span>);
+	    <span class="enscript-keyword">if</span> (bzb_slice_get(bp) != 0) {
+		printf(<span class="enscript-string">&quot;  %2d&quot;</span>, bzb_slice_get(bp)-1);
+	    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (j &gt;= 0) {
+		printf(<span class="enscript-string">&quot; *%2d&quot;</span>, j);
+	    } <span class="enscript-keyword">else</span> {
+		printf(<span class="enscript-string">&quot;    &quot;</span>);
+	    }
+	    <span class="enscript-keyword">if</span> (bp-&gt;bzb_mount_point[0] != 0) {
+		printf(<span class="enscript-string">&quot; %.64s&quot;</span>, bp-&gt;bzb_mount_point);
+	    }
+	}
+	printf(<span class="enscript-string">&quot;\n&quot;</span>);
+    }
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">full_dump_partition_entry</span>(partition_map_header *map, <span class="enscript-type">int</span> ix)
+{
+    partition_map * cur;
+    DPME *p;
+    <span class="enscript-type">int</span> i;
+    u32 t;
+
+    cur = find_entry_by_disk_address(ix, map);
+    <span class="enscript-keyword">if</span> (cur == NULL) {
+	printf(<span class="enscript-string">&quot;No such partition\n&quot;</span>);
+	<span class="enscript-keyword">return</span>;
+    }
+    
+    p = cur-&gt;data;
+    printf(<span class="enscript-string">&quot;             signature: 0x%x\n&quot;</span>, p-&gt;dpme_signature);
+    printf(<span class="enscript-string">&quot;             reserved1: 0x%x\n&quot;</span>, p-&gt;dpme_reserved_1);
+    printf(<span class="enscript-string">&quot; number of map entries: %d\n&quot;</span>, p-&gt;dpme_map_entries);
+    printf(<span class="enscript-string">&quot;        physical start: %10u  length: %10u\n&quot;</span>, p-&gt;dpme_pblock_start, p-&gt;dpme_pblocks);
+    printf(<span class="enscript-string">&quot;         logical start: %10u  length: %10u\n&quot;</span>, p-&gt;dpme_lblock_start, p-&gt;dpme_lblocks);
+
+    printf(<span class="enscript-string">&quot;                 flags: 0x%x\n&quot;</span>, (u32)p-&gt;dpme_flags);
+    printf(<span class="enscript-string">&quot;                        &quot;</span>);
+    <span class="enscript-keyword">if</span> (dpme_valid_get(p)) printf(<span class="enscript-string">&quot;valid &quot;</span>);
+    <span class="enscript-keyword">if</span> (dpme_allocated_get(p)) printf(<span class="enscript-string">&quot;alloc &quot;</span>);
+    <span class="enscript-keyword">if</span> (dpme_in_use_get(p)) printf(<span class="enscript-string">&quot;in-use &quot;</span>);
+    <span class="enscript-keyword">if</span> (dpme_bootable_get(p)) printf(<span class="enscript-string">&quot;boot &quot;</span>);
+    <span class="enscript-keyword">if</span> (dpme_readable_get(p)) printf(<span class="enscript-string">&quot;read &quot;</span>);
+    <span class="enscript-keyword">if</span> (dpme_writable_get(p)) printf(<span class="enscript-string">&quot;write &quot;</span>);
+    <span class="enscript-keyword">if</span> (dpme_os_pic_code_get(p)) printf(<span class="enscript-string">&quot;pic &quot;</span>);
+    t = p-&gt;dpme_flags &gt;&gt; 7;
+    <span class="enscript-keyword">for</span> (i = 7; i &lt;= 31; i++) {
+    	<span class="enscript-keyword">if</span> (t &amp; 0x1) {
+    	    printf(<span class="enscript-string">&quot;%d &quot;</span>, i);
+    	}
+    	t = t &gt;&gt; 1;
+    }
+    printf(<span class="enscript-string">&quot;\n&quot;</span>);
+
+    printf(<span class="enscript-string">&quot;                  name: '%.32s'\n&quot;</span>, p-&gt;dpme_name);
+    printf(<span class="enscript-string">&quot;                  type: '%.32s'\n&quot;</span>, p-&gt;dpme_type);
+
+    printf(<span class="enscript-string">&quot;      boot start block: %10u\n&quot;</span>, p-&gt;dpme_boot_block);
+    printf(<span class="enscript-string">&quot;boot length (in bytes): %10u\n&quot;</span>, p-&gt;dpme_boot_bytes);
+    printf(<span class="enscript-string">&quot;          load address: 0x%08x  0x%08x\n&quot;</span>,
+		(u32)p-&gt;dpme_load_addr, (u32)p-&gt;dpme_load_addr_2);
+    printf(<span class="enscript-string">&quot;         start address: 0x%08x  0x%08x\n&quot;</span>, 
+		(u32)p-&gt;dpme_goto_addr, (u32)p-&gt;dpme_goto_addr_2);
+    printf(<span class="enscript-string">&quot;              checksum: 0x%08x\n&quot;</span>, p-&gt;dpme_checksum);
+    printf(<span class="enscript-string">&quot;             processor: '%.32s'\n&quot;</span>, p-&gt;dpme_process_id);
+    printf(<span class="enscript-string">&quot;boot args field -&quot;</span>);
+    dump_block((<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *)p-&gt;dpme_boot_args, 32*4);
+    printf(<span class="enscript-string">&quot;dpme_reserved_3 -&quot;</span>);
+    dump_block((<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *)p-&gt;dpme_reserved_3, 62*4);
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">dump_block</span>(<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *addr, <span class="enscript-type">int</span> len)
+{
+    <span class="enscript-type">int</span> i;
+    <span class="enscript-type">int</span> j;
+    <span class="enscript-type">int</span> limit1;
+    <span class="enscript-type">int</span> limit;
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">LINE_LEN</span> 16
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">UNIT_LEN</span>  4
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OTHER_LEN</span>  8
+
+    <span class="enscript-keyword">for</span> (i = 0; i &lt; len; i = limit) {
+    	limit1 = i + LINE_LEN;
+    	<span class="enscript-keyword">if</span> (limit1 &gt; len) {
+    	    limit = len;
+    	} <span class="enscript-keyword">else</span> {
+    	    limit = limit1;
+    	}
+	printf(<span class="enscript-string">&quot;\n%03x: &quot;</span>, i);
+    	<span class="enscript-keyword">for</span> (j = i; j &lt; limit1; j++) {
+	    <span class="enscript-keyword">if</span> (j % UNIT_LEN == 0) {
+		printf(<span class="enscript-string">&quot; &quot;</span>);
+	    }
+	    <span class="enscript-keyword">if</span> (j &lt; limit) {
+		printf(<span class="enscript-string">&quot;%02x&quot;</span>, addr[j]);
+	    } <span class="enscript-keyword">else</span> {
+		printf(<span class="enscript-string">&quot;  &quot;</span>);
+	    }
+    	}
+	printf(<span class="enscript-string">&quot; &quot;</span>);
+    	<span class="enscript-keyword">for</span> (j = i; j &lt; limit; j++) {
+	    <span class="enscript-keyword">if</span> (j % OTHER_LEN == 0) {
+		printf(<span class="enscript-string">&quot; &quot;</span>);
+	    }
+    	    <span class="enscript-keyword">if</span> (addr[j] &lt; <span class="enscript-string">' '</span>) {
+    	    	printf(<span class="enscript-string">&quot;.&quot;</span>);
+    	    } <span class="enscript-keyword">else</span> {
+    	    	printf(<span class="enscript-string">&quot;%c&quot;</span>, addr[j]);
+    	    }
+    	}
+    }
+    printf(<span class="enscript-string">&quot;\n&quot;</span>);
+}
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">full_dump_block_zero</span>(partition_map_header *map)
+{
+    Block0 *zp;
+    DDMap *m;
+    <span class="enscript-type">int</span> i;
+
+    <span class="enscript-keyword">if</span> (map == NULL) {
+	printf(<span class="enscript-string">&quot;No partition map exists\n&quot;</span>);
+	<span class="enscript-keyword">return</span>;
+    }
+
+    <span class="enscript-keyword">if</span> (map-&gt;misc == NULL) {
+	printf(<span class="enscript-string">&quot;No block zero\n&quot;</span>);
+	<span class="enscript-keyword">return</span>;
+    }
+    zp = map-&gt;misc;
+
+    printf(<span class="enscript-string">&quot;             signature: 0x%x\n&quot;</span>, zp-&gt;sbSig);
+    printf(<span class="enscript-string">&quot;       size of a block: %d\n&quot;</span>, zp-&gt;sbBlkSize);
+    printf(<span class="enscript-string">&quot;      number of blocks: %d\n&quot;</span>, zp-&gt;sbBlkCount);
+    printf(<span class="enscript-string">&quot;           device type: 0x%x\n&quot;</span>, zp-&gt;sbDevType);
+    printf(<span class="enscript-string">&quot;             device id: 0x%x\n&quot;</span>, zp-&gt;sbDevId);
+    printf(<span class="enscript-string">&quot;                  data: 0x%x\n&quot;</span>, zp-&gt;sbData);
+    printf(<span class="enscript-string">&quot;          driver count: %d\n&quot;</span>, zp-&gt;sbDrvrCount);
+    m = (DDMap *) zp-&gt;sbMap;
+    <span class="enscript-keyword">for</span> (i = 0; &amp;m[i].ddType &lt; &amp;zp-&gt;sbMap[247]; i++) {
+    	<span class="enscript-keyword">if</span> (m[i].ddBlock == 0 &amp;&amp; m[i].ddSize == 0 &amp;&amp; m[i].ddType == 0) {
+    	    <span class="enscript-keyword">break</span>;
+    	}
+	printf(<span class="enscript-string">&quot;      driver %3u block: %d\n&quot;</span>, i+1, m[i].ddBlock);
+	printf(<span class="enscript-string">&quot;        size in blocks: %d\n&quot;</span>, m[i].ddSize);
+	printf(<span class="enscript-string">&quot;           driver type: 0x%x\n&quot;</span>, m[i].ddType);
+    }
+    printf(<span class="enscript-string">&quot;remainder of block -&quot;</span>);
+    dump_block((<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *)(<span class="enscript-type">void</span> *)&amp;m[i].ddBlock, (&amp;zp-&gt;sbMap[247]-((<span class="enscript-type">unsigned</span> <span class="enscript-type">short</span> *)(<span class="enscript-type">void</span> *)&amp;m[i].ddBlock))*2);
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">display_patches</span>(partition_map *entry)
+{
+    <span class="enscript-type">long</span> <span class="enscript-type">long</span> offset;
+    MEDIA m;
+    <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *patch_block;
+    PatchListPtr p;
+    PatchDescriptorPtr q;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *next;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *s;
+    <span class="enscript-type">int</span> i;
+    
+    offset = entry-&gt;data-&gt;dpme_pblock_start;
+    m = entry-&gt;the_map-&gt;m;
+    offset = ((<span class="enscript-type">long</span> <span class="enscript-type">long</span>) entry-&gt;data-&gt;dpme_pblock_start) * entry-&gt;the_map-&gt;logical_block;
+    <span class="enscript-keyword">if</span> (patch_block == NULL) {
+	patch_block = (<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *) malloc(PBLOCK_SIZE);
+	<span class="enscript-keyword">if</span> (patch_block == NULL) {
+	    error(errno, <span class="enscript-string">&quot;can't allocate memory for patch block buffer&quot;</span>);
+	    <span class="enscript-keyword">return</span>;
+	}
+    }
+    <span class="enscript-keyword">if</span> (read_media(m, (<span class="enscript-type">long</span> <span class="enscript-type">long</span>)offset, PBLOCK_SIZE, (<span class="enscript-type">char</span> *)patch_block) == 0) {
+	error(errno, <span class="enscript-string">&quot;Can't read patch block&quot;</span>);
+	<span class="enscript-keyword">return</span>;
+    }
+    p = (PatchListPtr) patch_block;
+    <span class="enscript-keyword">if</span> (p-&gt;numPatchBlocks != 1) {
+	i = p-&gt;numPatchBlocks;
+	free(patch_block);
+	patch_block = (<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *) malloc(PBLOCK_SIZE*i);
+	<span class="enscript-keyword">if</span> (patch_block == NULL) {
+	    error(errno, <span class="enscript-string">&quot;can't allocate memory for patch blocks buffer&quot;</span>);
+	    <span class="enscript-keyword">return</span>;
+	}
+	s = patch_block + PBLOCK_SIZE*i;
+	<span class="enscript-keyword">while</span> (i &gt; 0) {
+	    s -= PBLOCK_SIZE;
+	    i -= 1;
+	    <span class="enscript-keyword">if</span> (read_media(m, offset+i, PBLOCK_SIZE, (<span class="enscript-type">char</span> *)s) == 0) {
+		error(errno, <span class="enscript-string">&quot;Can't read patch block %d&quot;</span>, i);
+		<span class="enscript-keyword">return</span>;
+	    }
+	}
+	p = (PatchListPtr) patch_block;
+    }
+    printf(<span class="enscript-string">&quot;Patch list (%d entries)\n&quot;</span>, p-&gt;numPatches);
+    q = p-&gt;thePatch;
+    <span class="enscript-keyword">for</span> (i = 0; i &lt; p-&gt;numPatches; i++) {
+	printf(<span class="enscript-string">&quot;%2d signature: '%.4s'\n&quot;</span>, i+1, (<span class="enscript-type">char</span> *)&amp;q-&gt;patchSig);
+	printf(<span class="enscript-string">&quot;     version: %d.%d\n&quot;</span>, q-&gt;majorVers, q-&gt;minorVers);
+	printf(<span class="enscript-string">&quot;       flags: 0x%lx\n&quot;</span>, q-&gt;flags);
+	printf(<span class="enscript-string">&quot;      offset: %ld\n&quot;</span>, q-&gt;patchOffset);
+	printf(<span class="enscript-string">&quot;        size: %ld\n&quot;</span>, q-&gt;patchSize);
+	printf(<span class="enscript-string">&quot;         CRC: 0x%lx\n&quot;</span>, q-&gt;patchCRC);
+	printf(<span class="enscript-string">&quot;        name: '%.*s'\n&quot;</span>, q-&gt;patchName[0], &amp;q-&gt;patchName[1]);
+	printf(<span class="enscript-string">&quot;      vendor: '%.*s'\n&quot;</span>, q-&gt;patchVendor[0], &amp;q-&gt;patchVendor[1]);
+	next = ((<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *)q) + q-&gt;patchDescriptorLen;
+	s = &amp;q-&gt;patchVendor[q-&gt;patchVendor[0]+1];
+	<span class="enscript-keyword">if</span> (next &gt; s) {
+	    printf(<span class="enscript-string">&quot;remainder of entry -&quot;</span>);
+	    dump_block(s, next-s);
+	}
+	q = (PatchDescriptorPtr)next;
+    }
+}
+
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">get_max_type_string_length</span>(partition_map_header *map)
+{
+    partition_map * entry;
+    <span class="enscript-type">int</span> max;
+    <span class="enscript-type">int</span> length;
+
+    <span class="enscript-keyword">if</span> (map == NULL) {
+	<span class="enscript-keyword">return</span> 0;
+    }
+
+    max = 0;
+
+    <span class="enscript-keyword">for</span> (entry = map-&gt;disk_order; entry != NULL; entry = entry-&gt;next_on_disk) {
+	length = strnlen(entry-&gt;data-&gt;dpme_type, DPISTRLEN);
+	<span class="enscript-keyword">if</span> (length &gt; max) {
+	    max = length;
+	}
+    }
+
+    <span class="enscript-keyword">return</span> max;
+}
+
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">get_max_name_string_length</span>(partition_map_header *map)
+{
+    partition_map * entry;
+    <span class="enscript-type">int</span> max;
+    <span class="enscript-type">int</span> length;
+
+    <span class="enscript-keyword">if</span> (map == NULL) {
+	<span class="enscript-keyword">return</span> 0;
+    }
+
+    max = 0;
+
+    <span class="enscript-keyword">for</span> (entry = map-&gt;disk_order; entry != NULL; entry = entry-&gt;next_on_disk) {
+	length = strnlen(entry-&gt;data-&gt;dpme_name, DPISTRLEN);
+	<span class="enscript-keyword">if</span> (length &gt; max) {
+	    max = length;
+	}
+
+	<span class="enscript-keyword">if</span> (fflag) {
+		<span class="enscript-keyword">if</span> (entry-&gt;HFS_name == NULL) {
+		    length = 0;
+		} <span class="enscript-keyword">else</span> {
+		    length = strlen(entry-&gt;HFS_name) + 2;
+		}
+		<span class="enscript-keyword">if</span> (length &gt; max) {
+		    max = length;
+		}
+	}
+    }
+
+    <span class="enscript-keyword">return</span> max;
+}
+
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">get_max_base_or_length</span>(partition_map_header *map)
+{
+    partition_map * entry;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> max;
+
+    <span class="enscript-keyword">if</span> (map == NULL) {
+	<span class="enscript-keyword">return</span> 0;
+    }
+
+    max = 0;
+
+    <span class="enscript-keyword">for</span> (entry = map-&gt;disk_order; entry != NULL; entry = entry-&gt;next_on_disk) {
+	<span class="enscript-keyword">if</span> (entry-&gt;data-&gt;dpme_pblock_start &gt; max) {
+	    max = entry-&gt;data-&gt;dpme_pblock_start;
+	}
+	<span class="enscript-keyword">if</span> (entry-&gt;data-&gt;dpme_pblocks &gt; max) {
+	    max = entry-&gt;data-&gt;dpme_pblocks;
+	}
+	<span class="enscript-keyword">if</span> (entry-&gt;data-&gt;dpme_lblock_start &gt; max) {
+	    max = entry-&gt;data-&gt;dpme_lblock_start;
+	}
+	<span class="enscript-keyword">if</span> (entry-&gt;data-&gt;dpme_lblocks &gt; max) {
+	    max = entry-&gt;data-&gt;dpme_lblocks;
+	}
+    }
+
+    <span class="enscript-keyword">return</span> max;
+}
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">adjust_value_and_compute_prefix</span>(<span class="enscript-type">double</span> *value, <span class="enscript-type">int</span> *prefix)
+{
+    <span class="enscript-type">double</span> bytes;
+    <span class="enscript-type">int</span> multiplier;
+
+    bytes = *value;
+    <span class="enscript-keyword">if</span> (bytes &lt; 1024.0) {
+	multiplier = <span class="enscript-string">' '</span>;
+    } <span class="enscript-keyword">else</span> {
+	bytes = bytes / 1024.0;
+	<span class="enscript-keyword">if</span> (bytes &lt; 1024.0) {
+	    multiplier = <span class="enscript-string">'K'</span>;
+	} <span class="enscript-keyword">else</span> {
+	    bytes = bytes / 1024.0;
+	    <span class="enscript-keyword">if</span> (bytes &lt; 1024.0) {
+		multiplier = <span class="enscript-string">'M'</span>;
+	    } <span class="enscript-keyword">else</span> {
+		bytes = bytes / 1024.0;
+		<span class="enscript-keyword">if</span> (bytes &lt; 1024.0) {
+		    multiplier = <span class="enscript-string">'G'</span>;
+		} <span class="enscript-keyword">else</span> {
+		    bytes = bytes / 1024.0;
+		    multiplier = <span class="enscript-string">'T'</span>;
+		}
+	    }
+	}
+    }
+    *value = bytes;
+    *prefix = multiplier;
+}
+</pre>
+<hr />
+</body></html>

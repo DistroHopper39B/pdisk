@@ -1,0 +1,605 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>file_media.c</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">file_media.c&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="file_media.c">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * file_media.c -
+ *
+ * Written by Eryk Vershen
+ */</span>
+
+<span class="enscript-comment">/*
+ * Copyright 1997,1998 by Apple Computer, Inc.
+ *              All Rights Reserved 
+ *  
+ * Permission to use, copy, modify, and distribute this software and 
+ * its documentation for any purpose and without fee is hereby granted, 
+ * provided that the above copyright notice appears in all copies and 
+ * that both the copyright notice and this permission notice appear in 
+ * supporting documentation. 
+ *  
+ * APPLE COMPUTER DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+ * FOR A PARTICULAR PURPOSE. 
+ *  
+ * IN NO EVENT SHALL APPLE COMPUTER BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+ * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
+ * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
+ * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+ */</span>
+
+<span class="enscript-comment">// for printf()
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdio.h&gt;</span>
+<span class="enscript-comment">// for malloc() &amp; free()
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdlib.h&gt;</span>
+<span class="enscript-comment">// for lseek(), read(), write(), close()
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;unistd.h&gt;</span>
+<span class="enscript-comment">// for open()
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;fcntl.h&gt;</span>
+<span class="enscript-comment">// for LONG_MAX
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;limits.h&gt;</span>
+<span class="enscript-comment">// for errno
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;errno.h&gt;</span>
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__linux__</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;sys/ioctl.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;linux/fs.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;linux/hdreg.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;sys/stat.h&gt;</span>
+#<span class="enscript-reference">else</span>
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__unix__</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;sys/ioctl.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;sys/stat.h&gt;</span>
+#<span class="enscript-reference">endif</span>
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;file_media.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;errors.h&quot;</span>
+
+
+<span class="enscript-comment">/*
+ * Defines
+ */</span>
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__linux__</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">LOFF_MAX</span> 9223372036854775807LL
+<span class="enscript-type">extern</span> __loff_t llseek <span class="enscript-function-name">__P</span> ((<span class="enscript-type">int</span> __fd, __loff_t __offset, <span class="enscript-type">int</span> __whence));
+#<span class="enscript-reference">else</span>
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__unix__</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">loff_t</span> off_t
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">llseek</span> lseek
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">LOFF_MAX</span> LLONG_MAX
+#<span class="enscript-reference">else</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">loff_t</span> long
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">llseek</span> lseek
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">LOFF_MAX</span> LONG_MAX
+#<span class="enscript-reference">endif</span>
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">/*
+ * Types
+ */</span>
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> file_media *FILE_MEDIA;
+
+<span class="enscript-type">struct</span> file_media {
+    <span class="enscript-type">struct</span> media	m;
+    <span class="enscript-type">int</span>			fd;
+    <span class="enscript-type">int</span>			regular_file;
+};
+
+<span class="enscript-type">struct</span> file_media_globals {
+    <span class="enscript-type">long</span>		exists;
+    <span class="enscript-type">long</span>		kind;
+};
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> file_media_iterator *FILE_MEDIA_ITERATOR;
+
+<span class="enscript-type">struct</span> file_media_iterator {
+    <span class="enscript-type">struct</span> media_iterator   m;
+    <span class="enscript-type">long</span>		    style;
+    <span class="enscript-type">long</span>		    index;
+};
+
+
+<span class="enscript-comment">/*
+ * Global Constants
+ */</span>
+<span class="enscript-type">int</span> potential_block_sizes[] = {
+    512, 1024, 2048,
+    0
+};
+
+<span class="enscript-type">enum</span> {
+    kSCSI_Disks = 0,
+    kATA_Devices = 1,
+    kSCSI_CDs = 2,
+    kMaxStyle = 2
+};
+
+
+<span class="enscript-comment">/*
+ * Global Variables
+ */</span>
+<span class="enscript-type">static</span> <span class="enscript-type">long</span> file_inited = 0;
+<span class="enscript-type">static</span> <span class="enscript-type">struct</span> file_media_globals file_info;
+
+<span class="enscript-comment">/*
+ * Forward declarations
+ */</span>
+<span class="enscript-type">int</span> <span class="enscript-function-name">compute_block_size</span>(<span class="enscript-type">int</span> fd);
+<span class="enscript-type">void</span> <span class="enscript-function-name">file_init</span>(<span class="enscript-type">void</span>);
+FILE_MEDIA <span class="enscript-function-name">new_file_media</span>(<span class="enscript-type">void</span>);
+<span class="enscript-type">long</span> <span class="enscript-function-name">read_file_media</span>(MEDIA m, <span class="enscript-type">long</span> <span class="enscript-type">long</span> offset, <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> count, <span class="enscript-type">void</span> *address);
+<span class="enscript-type">long</span> <span class="enscript-function-name">write_file_media</span>(MEDIA m, <span class="enscript-type">long</span> <span class="enscript-type">long</span> offset, <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> count, <span class="enscript-type">void</span> *address);
+<span class="enscript-type">long</span> <span class="enscript-function-name">close_file_media</span>(MEDIA m);
+<span class="enscript-type">long</span> <span class="enscript-function-name">os_reload_file_media</span>(MEDIA m);
+FILE_MEDIA_ITERATOR <span class="enscript-function-name">new_file_iterator</span>(<span class="enscript-type">void</span>);
+<span class="enscript-type">void</span> <span class="enscript-function-name">reset_file_iterator</span>(MEDIA_ITERATOR m);
+<span class="enscript-type">char</span> *<span class="enscript-function-name">step_file_iterator</span>(MEDIA_ITERATOR m);
+<span class="enscript-type">void</span> <span class="enscript-function-name">delete_file_iterator</span>(MEDIA_ITERATOR m);
+
+
+<span class="enscript-comment">/*
+ * Routines
+ */</span>
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">file_init</span>(<span class="enscript-type">void</span>)
+{
+    <span class="enscript-keyword">if</span> (file_inited != 0) {
+	<span class="enscript-keyword">return</span>;
+    }
+    file_inited = 1;
+    
+    file_info.kind = allocate_media_kind();
+}
+
+
+FILE_MEDIA
+<span class="enscript-function-name">new_file_media</span>(<span class="enscript-type">void</span>)
+{
+    <span class="enscript-keyword">return</span> (FILE_MEDIA) new_media(<span class="enscript-keyword">sizeof</span>(<span class="enscript-type">struct</span> file_media));
+}
+
+
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">compute_block_size</span>(<span class="enscript-type">int</span> fd)
+{
+    <span class="enscript-type">int</span> size;
+    <span class="enscript-type">int</span> max_size;
+    loff_t x;
+    <span class="enscript-type">long</span> t;
+    <span class="enscript-type">int</span> i;
+    <span class="enscript-type">char</span> *buffer;
+    
+    max_size = 0;
+    <span class="enscript-keyword">for</span> (i = 0; ; i++) {
+    	size = potential_block_sizes[i];
+    	<span class="enscript-keyword">if</span> (size == 0) {
+	    <span class="enscript-keyword">break</span>;
+    	}
+    	<span class="enscript-keyword">if</span> (max_size &lt; size) {
+	    max_size = size;
+    	}
+    }
+    
+    buffer = malloc(max_size);
+    <span class="enscript-keyword">if</span> (buffer != 0) {
+	<span class="enscript-keyword">for</span> (i = 0; ; i++) {
+	    size = potential_block_sizes[i];
+	    <span class="enscript-keyword">if</span> (size == 0) {
+		<span class="enscript-keyword">break</span>;
+	    }
+	    <span class="enscript-keyword">if</span> ((x = llseek(fd, (loff_t)0, 0)) &lt; 0) {
+		error(errno, <span class="enscript-string">&quot;Can't seek on file&quot;</span>);
+		<span class="enscript-keyword">break</span>;
+	    }
+	    <span class="enscript-keyword">if</span> ((t = read(fd, buffer, size)) == size) {
+		free(buffer);
+		<span class="enscript-keyword">return</span> size;
+	    }
+	}
+    }
+    <span class="enscript-keyword">return</span> potential_block_sizes[0];
+}
+
+
+MEDIA
+<span class="enscript-function-name">open_file_as_media</span>(<span class="enscript-type">char</span> *file, <span class="enscript-type">int</span> oflag)
+{
+    FILE_MEDIA	a;
+    <span class="enscript-type">int</span>			fd;
+    loff_t off;
+#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__linux__</span>) || <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__unix__</span>)
+    <span class="enscript-type">struct</span> stat info;
+#<span class="enscript-reference">endif</span>
+	
+    <span class="enscript-keyword">if</span> (file_inited == 0) {
+	    file_init();
+    }
+    
+    a = 0;
+    fd = open(file, oflag);
+    <span class="enscript-keyword">if</span> (fd &gt;= 0) {
+	a = new_file_media();
+	<span class="enscript-keyword">if</span> (a != 0) {
+	    a-&gt;m.kind = file_info.kind;
+	    a-&gt;m.grain = compute_block_size(fd);
+	    off = llseek(fd, (loff_t)0, 2);	<span class="enscript-comment">/* seek to end of media */</span>
+#<span class="enscript-reference">if</span> !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__linux__</span>) &amp;&amp; !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__unix__</span>)
+	    <span class="enscript-keyword">if</span> (off &lt;= 0) {
+		off = 1; <span class="enscript-comment">/* XXX not right? */</span>
+	    }
+#<span class="enscript-reference">endif</span>
+	    <span class="enscript-comment">//printf(&quot;file size = %Ld\n&quot;, off);
+</span>	    a-&gt;m.size_in_bytes = (<span class="enscript-type">long</span> <span class="enscript-type">long</span>) off;
+	    a-&gt;m.do_read = read_file_media;
+	    a-&gt;m.do_write = write_file_media;
+	    a-&gt;m.do_close = close_file_media;
+	    a-&gt;m.do_os_reload = os_reload_file_media;
+	    a-&gt;fd = fd;
+	    a-&gt;regular_file = 0;
+#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__linux__</span>) || <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__unix__</span>)
+	    <span class="enscript-keyword">if</span> (fstat(fd, &amp;info) &lt; 0) {
+		error(errno, <span class="enscript-string">&quot;can't stat file '%s'&quot;</span>, file);
+	    } <span class="enscript-keyword">else</span> {
+		a-&gt;regular_file = S_ISREG(info.st_mode);
+	    }
+#<span class="enscript-reference">endif</span>
+	} <span class="enscript-keyword">else</span> {
+	    close(fd);
+	}
+    }
+    <span class="enscript-keyword">return</span> (MEDIA) a;
+}
+
+
+<span class="enscript-type">long</span>
+<span class="enscript-function-name">read_file_media</span>(MEDIA m, <span class="enscript-type">long</span> <span class="enscript-type">long</span> offset, <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> count, <span class="enscript-type">void</span> *address)
+{
+    FILE_MEDIA a;
+    <span class="enscript-type">long</span> rtn_value;
+    loff_t off;
+    <span class="enscript-type">int</span> t;
+
+    a = (FILE_MEDIA) m;
+    rtn_value = 0;
+    <span class="enscript-keyword">if</span> (a == 0) {
+	<span class="enscript-comment">/* no media */</span>
+	fprintf(stderr,<span class="enscript-string">&quot;no media\n&quot;</span>);
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (a-&gt;m.kind != file_info.kind) {
+	<span class="enscript-comment">/* wrong kind - XXX need to error here - this is an internal problem */</span>
+	fprintf(stderr,<span class="enscript-string">&quot;wrong kind\n&quot;</span>);
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (count &lt;= 0 || count % a-&gt;m.grain != 0) {
+	<span class="enscript-comment">/* can't handle size */</span>
+	fprintf(stderr,<span class="enscript-string">&quot;bad size\n&quot;</span>);
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (offset &lt; 0 || offset % a-&gt;m.grain != 0) {
+	<span class="enscript-comment">/* can't handle offset */</span>
+	fprintf(stderr,<span class="enscript-string">&quot;bad offset\n&quot;</span>);
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (offset + count &gt; a-&gt;m.size_in_bytes &amp;&amp; a-&gt;m.size_in_bytes != (<span class="enscript-type">long</span> <span class="enscript-type">long</span>) 0) {
+	<span class="enscript-comment">/* check for offset (and offset+count) too large */</span>
+	fprintf(stderr,<span class="enscript-string">&quot;offset+count too large\n&quot;</span>);
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (offset + count &gt; (<span class="enscript-type">long</span> <span class="enscript-type">long</span>) LOFF_MAX) {
+	<span class="enscript-comment">/* check for offset (and offset+count) too large */</span>
+	fprintf(stderr,<span class="enscript-string">&quot;offset+count too large 2\n&quot;</span>);
+    } <span class="enscript-keyword">else</span> {
+	<span class="enscript-comment">/* do the read */</span>
+	off = offset;
+	<span class="enscript-keyword">if</span> ((off = llseek(a-&gt;fd, off, 0)) &gt;= 0) {
+	    <span class="enscript-keyword">if</span> ((t = read(a-&gt;fd, address, count)) == (ssize_t)count) {
+		rtn_value = 1;
+	    } <span class="enscript-keyword">else</span> {
+		<span class="enscript-comment">// fprintf(stderr,&quot;read failed\n&quot;);
+</span>	    }
+	} <span class="enscript-keyword">else</span> {
+	    <span class="enscript-comment">// fprintf(stderr,&quot;lseek failed\n&quot;);
+</span>	}
+    }
+    <span class="enscript-keyword">return</span> rtn_value;
+}
+
+
+<span class="enscript-type">long</span>
+<span class="enscript-function-name">write_file_media</span>(MEDIA m, <span class="enscript-type">long</span> <span class="enscript-type">long</span> offset, <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> count, <span class="enscript-type">void</span> *address)
+{
+    FILE_MEDIA a;
+    <span class="enscript-type">long</span> rtn_value;
+    loff_t off;
+    <span class="enscript-type">int</span> t;
+	
+    a = (FILE_MEDIA) m;
+    rtn_value = 0;
+    <span class="enscript-keyword">if</span> (a == 0) {
+	<span class="enscript-comment">/* no media */</span>
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (a-&gt;m.kind != file_info.kind) {
+	<span class="enscript-comment">/* wrong kind - XXX need to error here - this is an internal problem */</span>
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (count &lt;= 0 || count % a-&gt;m.grain != 0) {
+	<span class="enscript-comment">/* can't handle size */</span>
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (offset &lt; 0 || offset % a-&gt;m.grain != 0) {
+	<span class="enscript-comment">/* can't handle offset */</span>
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (offset + count &gt; (<span class="enscript-type">long</span> <span class="enscript-type">long</span>) LOFF_MAX) {
+	<span class="enscript-comment">/* check for offset (and offset+count) too large */</span>
+    } <span class="enscript-keyword">else</span> {
+	<span class="enscript-comment">/* do the write  */</span>
+	off = offset;
+	<span class="enscript-keyword">if</span> ((off = llseek(a-&gt;fd, off, 0)) &gt;= 0) {
+		<span class="enscript-keyword">if</span> ((t = write(a-&gt;fd, address, count)) == (ssize_t)count) {
+		<span class="enscript-keyword">if</span> (off + count &gt; a-&gt;m.size_in_bytes) {
+			a-&gt;m.size_in_bytes = off + count;
+		}
+		rtn_value = 1;
+	    }
+	}
+    }
+    <span class="enscript-keyword">return</span> rtn_value;
+}
+
+
+<span class="enscript-type">long</span>
+<span class="enscript-function-name">close_file_media</span>(MEDIA m)
+{
+    FILE_MEDIA a;
+    
+    a = (FILE_MEDIA) m;
+    <span class="enscript-keyword">if</span> (a == 0) {
+	<span class="enscript-keyword">return</span> 0;
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (a-&gt;m.kind != file_info.kind) {
+	<span class="enscript-comment">/* XXX need to error here - this is an internal problem */</span>
+	<span class="enscript-keyword">return</span> 0;
+    }
+    
+    close(a-&gt;fd);
+    <span class="enscript-keyword">return</span> 1;
+}
+
+
+<span class="enscript-type">long</span>
+<span class="enscript-function-name">os_reload_file_media</span>(MEDIA m)
+{
+    FILE_MEDIA a;
+    <span class="enscript-type">long</span> rtn_value;
+#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__linux__</span>)
+    <span class="enscript-type">int</span> i;
+    <span class="enscript-type">int</span> saved_errno;
+#<span class="enscript-reference">endif</span>
+	
+    a = (FILE_MEDIA) m;
+    rtn_value = 0;
+    <span class="enscript-keyword">if</span> (a == 0) {
+	<span class="enscript-comment">/* no media */</span>
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (a-&gt;m.kind != file_info.kind) {
+	<span class="enscript-comment">/* wrong kind - XXX need to error here - this is an internal problem */</span>
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (a-&gt;regular_file) {
+	<span class="enscript-comment">/* okay - nothing to do */</span>
+	rtn_value = 1;
+    } <span class="enscript-keyword">else</span> {
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__linux__</span>
+	sync();
+	sleep(2);
+	<span class="enscript-keyword">if</span> ((i = ioctl(a-&gt;fd, BLKRRPART)) != 0) {
+	    saved_errno = errno;
+	} <span class="enscript-keyword">else</span> {
+	    <span class="enscript-comment">// some kernel versions (1.2.x) seem to have trouble
+</span>	    <span class="enscript-comment">// rereading the partition table, but if asked to do it
+</span>	    <span class="enscript-comment">// twice, the second time works. - <a href="mailto:biro@yggdrasil.com">biro@yggdrasil.com</a> */
+</span>	    sync();
+	    sleep(2);
+	    <span class="enscript-keyword">if</span> ((i = ioctl(a-&gt;fd, BLKRRPART)) != 0) {
+		saved_errno = errno;
+	    }
+	}
+
+	<span class="enscript-comment">// printf(&quot;Syncing disks.\n&quot;);
+</span>	sync();
+	sleep(4);		<span class="enscript-comment">/* for sync() */</span>
+
+	<span class="enscript-keyword">if</span> (i &lt; 0) {
+	    error(saved_errno, <span class="enscript-string">&quot;Re-read of partition table failed&quot;</span>);
+	    printf(<span class="enscript-string">&quot;Reboot your system to ensure the &quot;</span>
+		    <span class="enscript-string">&quot;partition table is updated.\n&quot;</span>);
+	}
+#<span class="enscript-reference">endif</span>
+	rtn_value = 1;
+    }
+    <span class="enscript-keyword">return</span> rtn_value;
+}
+
+
+#<span class="enscript-reference">if</span> !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__linux__</span>) &amp;&amp; !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__unix__</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">mark</span> -
+#<span class="enscript-reference">endif</span>
+
+
+FILE_MEDIA_ITERATOR
+<span class="enscript-function-name">new_file_iterator</span>(<span class="enscript-type">void</span>)
+{
+    <span class="enscript-keyword">return</span> (FILE_MEDIA_ITERATOR) new_media_iterator(<span class="enscript-keyword">sizeof</span>(<span class="enscript-type">struct</span> file_media_iterator));
+}
+
+
+MEDIA_ITERATOR
+<span class="enscript-function-name">create_file_iterator</span>(<span class="enscript-type">void</span>)
+{
+    FILE_MEDIA_ITERATOR a;
+    
+    <span class="enscript-keyword">if</span> (file_inited == 0) {
+	file_init();
+    }
+    
+    a = new_file_iterator();
+    <span class="enscript-keyword">if</span> (a != 0) {
+	a-&gt;m.kind = file_info.kind;
+	a-&gt;m.state = kInit;
+	a-&gt;m.do_reset = reset_file_iterator;
+	a-&gt;m.do_step = step_file_iterator;
+	a-&gt;m.do_delete = delete_file_iterator;
+	a-&gt;style = 0;
+	a-&gt;index = 0;
+    }
+
+    <span class="enscript-keyword">return</span> (MEDIA_ITERATOR) a;
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">reset_file_iterator</span>(MEDIA_ITERATOR m)
+{
+    FILE_MEDIA_ITERATOR a;
+    
+    a = (FILE_MEDIA_ITERATOR) m;
+    <span class="enscript-keyword">if</span> (a == 0) {
+	<span class="enscript-comment">/* no media */</span>
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (a-&gt;m.kind != file_info.kind) {
+	<span class="enscript-comment">/* wrong kind - XXX need to error here - this is an internal problem */</span>
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (a-&gt;m.state != kInit) {
+	a-&gt;m.state = kReset;
+    }
+}
+
+
+<span class="enscript-type">char</span> *
+<span class="enscript-function-name">step_file_iterator</span>(MEDIA_ITERATOR m)
+{
+    FILE_MEDIA_ITERATOR a;
+    <span class="enscript-type">char</span> *result;
+    <span class="enscript-type">struct</span> stat info;
+    <span class="enscript-type">int</span>	fd;
+    <span class="enscript-type">int</span> bump;
+    <span class="enscript-type">int</span> value;
+    
+    a = (FILE_MEDIA_ITERATOR) m;
+    <span class="enscript-keyword">if</span> (a == 0) {
+	<span class="enscript-comment">/* no media */</span>
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (a-&gt;m.kind != file_info.kind) {
+	<span class="enscript-comment">/* wrong kind - XXX need to error here - this is an internal problem */</span>
+    } <span class="enscript-keyword">else</span> {
+	<span class="enscript-keyword">switch</span> (a-&gt;m.state) {
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">kInit</span>:
+	    a-&gt;m.state = kReset;
+	    <span class="enscript-comment">/* fall through to reset */</span>
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">kReset</span>:
+	    a-&gt;style = 0 <span class="enscript-comment">/* first style */</span>;
+	    a-&gt;index = 0 <span class="enscript-comment">/* first index */</span>;
+	    a-&gt;m.state = kIterating;
+	    <span class="enscript-comment">/* fall through to iterate */</span>
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">kIterating</span>:
+	    <span class="enscript-keyword">while</span> (1) {
+		<span class="enscript-keyword">if</span> (a-&gt;style &gt; kMaxStyle) {
+		    <span class="enscript-keyword">break</span>;
+		}
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">notdef</span>
+		<span class="enscript-comment">/* if old version of mklinux then skip CD drive */</span>
+		<span class="enscript-keyword">if</span> (a-&gt;style == kSCSI_Disks &amp;&amp; a-&gt;index == 3) {
+		    a-&gt;index += 1;
+		}
+#<span class="enscript-reference">endif</span>
+		<span class="enscript-comment">/* generate result */</span>
+		result = (<span class="enscript-type">char</span> *) malloc(20);
+		<span class="enscript-keyword">if</span> (result != NULL) {
+		    <span class="enscript-comment">/*
+		     * for DR3 we should actually iterate through:
+		     *
+		     *    /dev/sd[a...]    # first missing is end of list
+		     *    /dev/hd[a...]    # may be holes in sequence
+		     *    /dev/scd[0...]   # first missing is end of list
+		     *
+		     * and stop in each group when either a stat of
+		     * the name fails or if an open fails for
+		     * particular reasons.
+		     */</span>
+		    bump = 0;
+		    value = (<span class="enscript-type">int</span>) a-&gt;index;
+		    <span class="enscript-keyword">switch</span> (a-&gt;style) {
+		    <span class="enscript-keyword">case</span> <span class="enscript-reference">kSCSI_Disks</span>:
+			<span class="enscript-keyword">if</span> (value &lt; 26) {
+			    snprintf(result, 20, <span class="enscript-string">&quot;/dev/sd%c&quot;</span>, <span class="enscript-string">'a'</span>+value);
+			} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (value &lt; 676) {
+			    snprintf(result, 20, <span class="enscript-string">&quot;/dev/sd%c%c&quot;</span>,
+				    <span class="enscript-string">'a'</span> + value / 26,
+				    <span class="enscript-string">'a'</span> + value % 26);
+			} <span class="enscript-keyword">else</span> {
+			    bump = -1;
+			}
+			<span class="enscript-keyword">break</span>;
+		    <span class="enscript-keyword">case</span> <span class="enscript-reference">kATA_Devices</span>:
+			<span class="enscript-keyword">if</span> (value &lt; 26) {
+			    snprintf(result, 20, <span class="enscript-string">&quot;/dev/hd%c&quot;</span>, <span class="enscript-string">'a'</span>+value);
+			} <span class="enscript-keyword">else</span> {
+			    bump = -1;
+			}
+			<span class="enscript-keyword">break</span>;
+		    <span class="enscript-keyword">case</span> <span class="enscript-reference">kSCSI_CDs</span>:
+			<span class="enscript-keyword">if</span> (value &lt; 10) {
+			    snprintf(result, 20, <span class="enscript-string">&quot;/dev/scd%c&quot;</span>, <span class="enscript-string">'0'</span>+value);
+			} <span class="enscript-keyword">else</span> {
+			    bump = -1;
+			}
+			<span class="enscript-keyword">break</span>;
+		    }
+		    <span class="enscript-keyword">if</span> (bump != 0) {
+			<span class="enscript-comment">// already set don't even check
+</span>		    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (stat(result, &amp;info) &lt; 0) {
+			bump = 1;
+		    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> ((fd = open(result, O_RDONLY)) &gt;= 0) {
+			close(fd);
+#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__linux__</span>) || <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__unix__</span>)
+		    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (errno == ENXIO || errno == ENODEV) {
+			<span class="enscript-keyword">if</span> (a-&gt;style == kATA_Devices) {
+			    bump = -1;
+			} <span class="enscript-keyword">else</span> {
+			    bump = 1;
+			}
+#<span class="enscript-reference">endif</span>
+		    }
+		    <span class="enscript-keyword">if</span> (bump) {
+			<span class="enscript-keyword">if</span> (bump &gt; 0) {
+			    a-&gt;style += 1; <span class="enscript-comment">/* next style */</span>
+			    a-&gt;index = 0; <span class="enscript-comment">/* first index again */</span>
+			} <span class="enscript-keyword">else</span> {
+			    a-&gt;index += 1; <span class="enscript-comment">/* next index */</span>
+			}
+			free(result);
+			<span class="enscript-keyword">continue</span>;
+		    }
+		}
+
+		a-&gt;index += 1; <span class="enscript-comment">/* next index */</span>
+		<span class="enscript-keyword">return</span> result;
+	    }
+	    a-&gt;m.state = kEnd;
+	    <span class="enscript-comment">/* fall through to end */</span>
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">kEnd</span>:
+	<span class="enscript-reference">default</span>:
+	    <span class="enscript-keyword">break</span>;
+	}
+    }
+    <span class="enscript-keyword">return</span> 0 <span class="enscript-comment">/* no entry */</span>;
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">delete_file_iterator</span>(MEDIA_ITERATOR m)
+{
+    <span class="enscript-keyword">return</span>;
+}
+</pre>
+<hr />
+</body></html>

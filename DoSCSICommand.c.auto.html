@@ -1,0 +1,674 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>DoSCSICommand.c</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">DoSCSICommand.c&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="DoSCSICommand.c">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * DoScsiCommand.c
+ *
+ * This is the common entry to the original and asynchronous SCSI Manager calls:
+ * if the asynchronous SCSI Manager is requested, it calls it. Otherwise, it
+ * calls the original SCSI Manager and executes Request Sense if necessary.
+ *
+ * This function returns &quot;autosense&quot; in the SCSI_Sense_Data area. This will
+ * be formatted in the senseMessage string.
+ */</span>
+
+<span class="enscript-comment">/*
+ * Copyright 1992, 1993, 1997, 1998 by Apple Computer, Inc.
+ *              All Rights Reserved 
+ *  
+ * Permission to use, copy, modify, and distribute this software and 
+ * its documentation for any purpose and without fee is hereby granted, 
+ * provided that the above copyright notice appears in all copies and 
+ * that both the copyright notice and this permission notice appear in 
+ * supporting documentation. 
+ *  
+ * APPLE COMPUTER DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+ * FOR A PARTICULAR PURPOSE. 
+ *  
+ * IN NO EVENT SHALL APPLE COMPUTER BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+ * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
+ * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
+ * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+ */</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;DoScsiCommand.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;util.h&quot;</span>
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Defines
+</span><span class="enscript-comment">//
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kSCSICommandTimeout</span>     (5 * 1000L)         <span class="enscript-comment">/* Five seconds             */</span>
+<span class="enscript-comment">/*
+ * This is the maximum number of times we try to grab the SCSI Bus
+ */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kMaxSCSIRetries</span>         40                  <span class="enscript-comment">/* 10 seconds, 4 times/sec  */</span>
+<span class="enscript-comment">/*
+ * This test is TRUE if the SCSI bus status indicates &quot;busy&quot; (which is the case
+ * if either the BSY or SEL bit is set).
+ */</span>
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">kScsiStatBSY</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiStatBSY</span>            (1 &lt;&lt; 6)
+#<span class="enscript-reference">endif</span>
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">kScsiStatSEL</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiStatSEL</span>            (1 &lt;&lt; 1)
+#<span class="enscript-reference">endif</span>
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">ScsiBusBusy</span>()       ((SCSIStat() &amp; (kScsiStatBSY | kScsiStatSEL)) != 0)
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Types
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Constants
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Variables
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">int</span>             gSCSIHiBusID;
+SCSIExecIOPB    *gSCSIExecIOPBPtr;
+UInt32          gSCSIExecIOPBPtrLen;
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Forward declarations
+</span><span class="enscript-comment">//
+</span>UInt16 <span class="enscript-function-name">GetCommandLength</span>(<span class="enscript-type">const</span> SCSI_CommandPtr cmdPtr);
+Boolean <span class="enscript-function-name">IsVirtualMemoryRunning</span>(<span class="enscript-type">void</span>);
+
+OSErr <span class="enscript-function-name">OriginalSCSI</span>(
+    DeviceIdent             scsiDevice,
+    <span class="enscript-type">const</span> SCSI_CommandPtr   scsiCommand,
+    UInt8                   scsiCommandLen,
+    Ptr                     dataBuffer,
+    ByteCount               dataLength,
+    UInt32                  scsiFlags,
+    ByteCount               *actualTransferCount,
+    UInt8                   *scsiStatusByte
+);
+
+OSErr <span class="enscript-function-name">DoOriginalSCSICommand</span>(
+    DeviceIdent             scsiDevice,
+    <span class="enscript-type">const</span> SCSI_CommandPtr   theSCSICommand,
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">short</span>          cmdBlockLength,
+    Ptr                     dataBuffer,
+    ByteCount               dataLength,
+    UInt32                  scsiFlags,
+    ByteCount               *actualTransferCount,
+    SCSI_Sense_Data         *sensePtr
+);
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Routines
+</span><span class="enscript-comment">//
+</span>
+<span class="enscript-comment">/*
+ * This returns TRUE if the command failed with &quot;Illegal Request.&quot; We need this
+ * so we can ignore LogSense or ReadDefectData if the device doesn't support
+ * these functions.
+ */</span>
+Boolean
+<span class="enscript-function-name">IsIllegalRequest</span>(
+    OSErr                   scsiStatus,
+    <span class="enscript-type">const</span> SCSI_Sense_Data   *senseDataPtr
+    )
+{
+    Boolean                 result;
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">SENSE</span>   (*senseDataPtr)
+
+    result = FALSE;
+    <span class="enscript-keyword">if</span> (scsiStatus == scsiNonZeroStatus
+     &amp;&amp; (SENSE.senseKey &amp; kScsiSenseKeyMask) == kScsiSenseIllegalReq
+     &amp;&amp; SENSE.additionalSenseLength &gt;= 4) {
+	<span class="enscript-keyword">switch</span> ((SENSE.additionalSenseCode &lt;&lt; 8) | SENSE.additionalSenseQualifier) {
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">0x0000</span>:
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">0x2000</span>:
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">0x2022</span>:    <span class="enscript-comment">/* Obsolete */</span>
+	result = TRUE;
+	<span class="enscript-keyword">break</span>;
+	<span class="enscript-reference">default</span>:
+	<span class="enscript-keyword">break</span>;
+	}
+    }
+    <span class="enscript-keyword">return</span> (result);
+#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">SENSE</span>
+}
+
+
+<span class="enscript-comment">/*
+ * This returns TRUE if the command failed with Device Not Ready (No Media Present)
+ */</span>
+Boolean
+<span class="enscript-function-name">IsNoMedia</span>(
+    OSErr                   scsiStatus,
+    <span class="enscript-type">const</span> SCSI_Sense_Data   *senseDataPtr
+    )
+{
+    Boolean                 result;
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">SENSE</span>   (*senseDataPtr)
+
+    result = FALSE;
+    <span class="enscript-keyword">if</span> (scsiStatus == scsiNonZeroStatus
+     &amp;&amp; (SENSE.senseKey &amp; kScsiSenseKeyMask) == kScsiSenseNotReady
+     &amp;&amp; SENSE.additionalSenseLength &gt;= 4) {
+	<span class="enscript-keyword">switch</span> ((SENSE.additionalSenseCode &lt;&lt; 8) | SENSE.additionalSenseQualifier) {
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">0x0000</span>:
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">0x3A00</span>:
+	result = TRUE;
+	<span class="enscript-keyword">break</span>;
+	<span class="enscript-reference">default</span>:
+	<span class="enscript-keyword">break</span>;
+	}
+    }
+    <span class="enscript-keyword">return</span> (result);
+#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">SENSE</span>
+}
+
+
+<span class="enscript-comment">/*
+ * Do one SCSI Command. If the device returns Check Condition, issue Request Sense
+ * (original SCSI Manager only) and interpret the sense data. The original SCSI
+ * command status is in SCB.status. If it is statusErr or scsiNonZeroStatus,
+ * the sense data is in SCB.sense and the Request Sense status is in
+ * SCB.requestSenseStatus.
+ *
+ * If sensePtr[0] is non-zero, there is a message.
+ */</span>
+OSErr
+<span class="enscript-function-name">DoSCSICommand</span>(
+    DeviceIdent             scsiDevice,
+    ConstStr255Param        currentAction,
+    <span class="enscript-type">const</span> SCSI_CommandPtr   callerSCSICommand,
+    Ptr                     dataBuffer,
+    ByteCount               dataLength,
+    UInt32                  scsiFlags,
+    ByteCount               *actualTransferCount,
+    SCSI_Sense_Data         *sensePtr,
+    StringPtr               senseMessage
+    )
+{
+    OSErr                   status;
+    SCSI_Command            theSCSICommand;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">short</span>          cmdBlockLength;
+	
+<span class="enscript-comment">//      SpinSpinner(&amp;gCurrentInfoPtr-&gt;spinnerRecord);
+</span><span class="enscript-comment">//      ShowProgressAction(currentAction);
+</span>    <span class="enscript-comment">/*
+     * Store the LUN information in the command block - this is needed
+     * for devices that only examine the command block for LUN values.
+     * (On SCSI-II, the asynchronous SCSI Manager also includes the
+     * LUN in the identify message).
+     */</span>
+    theSCSICommand = *callerSCSICommand;
+    theSCSICommand.scsi[1] &amp;= ~0xE0;
+    theSCSICommand.scsi[1] |= (scsiDevice.LUN &amp; 0x03) &lt;&lt; 5;
+    cmdBlockLength = GetCommandLength(&amp;theSCSICommand);
+    <span class="enscript-keyword">if</span> (senseMessage != NULL)
+	senseMessage[0] = 0;
+    <span class="enscript-keyword">if</span> (sensePtr != NULL)
+	sensePtr-&gt;errorCode = 0;
+    <span class="enscript-keyword">if</span> (scsiDevice.bus == kOriginalSCSIBusAdaptor) {
+	status = DoOriginalSCSICommand(
+	    scsiDevice,
+	    &amp;theSCSICommand,
+	    cmdBlockLength,
+	    dataBuffer,
+	    dataLength,
+	    scsiFlags,
+	    actualTransferCount,
+	    sensePtr
+	    );
+    }
+    <span class="enscript-keyword">else</span> {
+	clear_memory(gSCSIExecIOPBPtr, gSCSIExecIOPBPtrLen);
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">PB</span>  (*gSCSIExecIOPBPtr)
+	PB.scsiPBLength = gSCSIExecIOPBPtrLen;
+	PB.scsiFunctionCode = SCSIExecIO;
+	PB.scsiDevice = scsiDevice;
+	PB.scsiTimeout = kSCSICommandTimeout;
+	<span class="enscript-comment">/*
+	 * Fiddle the flags so they're the least disruptive possible.
+	 */</span>
+	PB.scsiFlags = scsiFlags | (scsiSIMQNoFreeze | scsiDontDisconnect);
+	<span class="enscript-keyword">if</span> (sensePtr != NULL) {
+	PB.scsiSensePtr = (UInt8 *) sensePtr;
+	PB.scsiSenseLength = <span class="enscript-keyword">sizeof</span> *sensePtr;
+	}
+	BlockMoveData(&amp;theSCSICommand, &amp;PB.scsiCDB.cdbBytes[0], cmdBlockLength);
+	PB.scsiCDBLength = cmdBlockLength;
+	<span class="enscript-keyword">if</span> (dataBuffer != NULL) {
+	PB.scsiDataPtr = (UInt8 *) dataBuffer;
+	PB.scsiDataLength = dataLength;
+	PB.scsiDataType = scsiDataBuffer;
+	PB.scsiTransferType = scsiTransferPolled;
+	}
+	status = SCSIAction((SCSI_PB *) &amp;PB);
+	<span class="enscript-keyword">if</span> (status == noErr)
+	status = PB.scsiResult;
+	<span class="enscript-keyword">if</span> (status == scsiSelectTimeout)
+	status = scsiDeviceNotThere;
+	<span class="enscript-keyword">if</span> (actualTransferCount != NULL) {
+	<span class="enscript-comment">/*
+	 * Make sure that the actual transfer count does not exceed
+	 * the allocation count (some devices spit extra data at us!)
+	 */</span>
+	*actualTransferCount = dataLength - PB.scsiDataResidual;
+	<span class="enscript-keyword">if</span> (*actualTransferCount &gt; dataLength)
+	    *actualTransferCount = dataLength;
+	}
+#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">PB</span>
+    }
+    <span class="enscript-keyword">if</span> (status == scsiNonZeroStatus
+     &amp;&amp; sensePtr != NULL
+     &amp;&amp; sensePtr-&gt;errorCode != 0
+     &amp;&amp; senseMessage != NULL) {
+<span class="enscript-comment">//          FormatSenseMessage(sensePtr, senseMessage);
+</span><span class="enscript-comment">//          ShowProgressAction(senseMessage);
+</span>    }
+    <span class="enscript-keyword">return</span> (status);
+}
+
+
+<span class="enscript-comment">/*
+ * Do a command with autosense using the original SCSI manager.
+ */</span>
+OSErr
+<span class="enscript-function-name">DoOriginalSCSICommand</span>(
+    DeviceIdent             scsiDevice,
+    <span class="enscript-type">const</span> SCSI_CommandPtr   theSCSICommand,
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">short</span>          cmdBlockLength,
+    Ptr                     dataBuffer,
+    ByteCount               dataLength,
+    UInt32                  scsiFlags,
+    ByteCount               *actualTransferCount,
+    SCSI_Sense_Data         *sensePtr
+    )
+{
+    OSErr                   status;
+    UInt8                   scsiStatusByte;
+    SCSI_Command            scsiStatusCommand;
+
+    status = OriginalSCSI(
+	    scsiDevice,
+	    theSCSICommand,
+	    cmdBlockLength,
+	    dataBuffer,
+	    dataLength,
+	    scsiFlags,
+	    actualTransferCount,
+	    &amp;scsiStatusByte
+	);
+    <span class="enscript-keyword">if</span> (status == scsiNonZeroStatus
+     &amp;&amp; scsiStatusByte == kScsiStatusCheckCondition
+     &amp;&amp; sensePtr != NULL) {
+	CLEAR(scsiStatusCommand);
+	CLEAR(*sensePtr);
+	scsiStatusCommand.scsi6.opcode = kScsiCmdRequestSense;
+	scsiStatusCommand.scsi[1] |= (scsiDevice.LUN &amp; 0x03) &lt;&lt; 5;
+	scsiStatusCommand.scsi6.len = <span class="enscript-keyword">sizeof</span> *sensePtr;
+	status = OriginalSCSI(
+	    scsiDevice,
+	    &amp;scsiStatusCommand,
+	    <span class="enscript-keyword">sizeof</span> scsiStatusCommand.scsi6,
+	    (Ptr) sensePtr,
+	    <span class="enscript-keyword">sizeof</span> *sensePtr,
+	    scsiDirectionIn,
+	    NULL,
+	    &amp;scsiStatusByte
+	    );
+	<span class="enscript-keyword">if</span> (status != noErr &amp;&amp; status != scsiDataRunError) {
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">notdef</span>
+	<span class="enscript-keyword">if</span> (gDebugOnError &amp;&amp; scsiStatusByte != kScsiStatusCheckCondition) {
+	    Str255          work;
+
+	    pstrcpy(work, <span class="enscript-string">&quot;\pAutosense failed &quot;</span>);
+	    AppendSigned(work, status);
+	    AppendChar(work, <span class="enscript-string">' '</span>);
+	    AppendHexLeadingZeros(work, scsiStatusByte, 2);
+	    DebugStr(work);
+	}
+#<span class="enscript-reference">endif</span>
+	sensePtr-&gt;errorCode = 0;
+	status = scsiAutosenseFailed;
+	}
+	<span class="enscript-keyword">else</span> {
+	status = scsiNonZeroStatus;
+	}
+    }
+    <span class="enscript-keyword">return</span> (status);
+}
+
+
+OSErr
+<span class="enscript-function-name">OriginalSCSI</span>(
+    DeviceIdent             scsiDevice,
+    <span class="enscript-type">const</span> SCSI_CommandPtr   scsiCommand,
+    UInt8                   scsiCommandLen,
+    Ptr                     dataBuffer,
+    ByteCount               dataLength,
+    UInt32                  scsiFlags,
+    ByteCount               *actualTransferCount,
+    UInt8                   *scsiStatusBytePtr
+    )
+{
+    OSErr                   status;             <span class="enscript-comment">/* Final status             */</span>
+    OSErr                   completionStatus;   <span class="enscript-comment">/* Status from ScsiComplete */</span>
+    <span class="enscript-type">short</span>                   totalTries;         <span class="enscript-comment">/* Get/Select retries       */</span>
+    <span class="enscript-type">short</span>                   getTries;           <span class="enscript-comment">/* Get retries              */</span>
+    <span class="enscript-type">short</span>                   iCount;             <span class="enscript-comment">/* Bus free counter         */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>           watchdog;           <span class="enscript-comment">/* Timeout after this       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>           myTransferCount;    <span class="enscript-comment">/* Gets TIB loop counter    */</span>
+    <span class="enscript-type">short</span>                   scsiStatusByte;     <span class="enscript-comment">/* Gets SCSIComplete result */</span>
+    <span class="enscript-type">short</span>                   scsiMsgByte;        <span class="enscript-comment">/* Gets SCSIComplete result */</span>
+    Boolean                 bufferHoldFlag;
+    <span class="enscript-comment">/*
+     * The TIB has the following format:
+     *  [0] scInc   user buffer         transferQuantum or transferSize
+     *  [1] scAdd   &amp;theTransferCount   1
+     *  [2] scLoop  -&gt; tib[0]           transferSize / transferQuantum
+     *  [3] scStop
+     * The intent of this is to return, in actualTransferCount, the number
+     * of times we cycled through the tib[] loop. This will be the actual
+     * transfer count if transferQuantum equals one, or the number of
+     * &quot;blocks&quot; if transferQuantum is the length of one sector.
+     */</span>
+    SCSIInstr               tib[4];             <span class="enscript-comment">/* Current TIB              */</span>
+
+    status = noErr;
+    bufferHoldFlag = FALSE;
+    scsiStatusByte = 0xFF;
+    scsiMsgByte = 0xFF;
+    myTransferCount = 0;
+    <span class="enscript-comment">/*
+     * If there is a data transfer, setup the tib.
+     */</span>
+    <span class="enscript-keyword">if</span> (dataBuffer != NULL) {
+	tib[0].scOpcode = scInc;
+	tib[0].scParam1 = (<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>) dataBuffer;
+	tib[0].scParam2 = 1;
+	tib[1].scOpcode = scAdd;
+	tib[1].scParam1 = (<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>) &amp;myTransferCount;
+	tib[1].scParam2 = 1;
+	tib[2].scOpcode = scLoop;
+	tib[2].scParam1 = (-2 * <span class="enscript-keyword">sizeof</span> (SCSIInstr));
+	tib[2].scParam2 = dataLength / tib[0].scParam2;
+	tib[3].scOpcode = scStop;
+	tib[3].scParam1 = 0;
+	tib[3].scParam2 = 0;
+    }
+    <span class="enscript-keyword">if</span> (IsVirtualMemoryRunning() &amp;&amp; dataBuffer != NULL) {
+	<span class="enscript-comment">/*
+	 * Lock down the user buffer, if any. In a real-world application
+	 * or driver, this would be done before calling the SCSI interface.
+	 */</span>
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">notdef</span>
+	FailOSErr(
+	HoldMemory(dataBuffer, dataLength),
+	<span class="enscript-string">&quot;\pCan't lock data buffer in physical memory&quot;</span>
+	);
+#<span class="enscript-reference">else</span>
+	HoldMemory(dataBuffer, dataLength);
+#<span class="enscript-reference">endif</span>
+	bufferHoldFlag = TRUE;
+    }
+    <span class="enscript-comment">/*
+     * Arbitrate for the scsi bus.  This will fail if some other device is
+     * accessing the bus at this time (which is unlikely).
+     *
+     *** Do not set breakpoints or call any functions that may require device
+     *** I/O (such as display code that accesses font resources between
+     *** SCSIGet and SCSIComplete,
+     *
+     */</span>
+    <span class="enscript-keyword">for</span> (totalTries = 0; totalTries &lt; kMaxSCSIRetries; totalTries++) {
+	<span class="enscript-keyword">for</span> (getTries = 0; getTries &lt; 4; getTries++) {
+	    <span class="enscript-comment">/*
+	     * Wait for the bus to go free.
+	     */</span>
+	    watchdog = TickCount() + 300;       <span class="enscript-comment">/* 5 second timeout         */</span>
+	    <span class="enscript-keyword">while</span> (ScsiBusBusy()) {
+		<span class="enscript-keyword">if</span> (<span class="enscript-comment">/*gStopNow || StopNow() ||*/</span> TickCount() &gt; watchdog) {
+		    status = scsiBusy;
+		    <span class="enscript-keyword">goto</span> <span class="enscript-reference">exit</span>;
+		}
+	    }
+	    <span class="enscript-comment">/*
+	     * The bus is free, try to grab it
+	     */</span>
+	    <span class="enscript-keyword">for</span> (iCount = 0; iCount &lt; 4; iCount++) {
+		<span class="enscript-keyword">if</span> ((status = SCSIGet()) == noErr)
+		    <span class="enscript-keyword">break</span>;
+	    }
+	    <span class="enscript-keyword">if</span> (status == noErr) {
+		<span class="enscript-keyword">break</span>;                          <span class="enscript-comment">/* Success: we have the bus */</span>
+	    }
+	    <span class="enscript-comment">/*
+	     * The bus became busy again. Try to wait for it to go free.
+	     */</span>
+	    <span class="enscript-keyword">for</span> (iCount = 0;
+		<span class="enscript-comment">/*gStopNow == FALSE &amp;&amp; StopNow() == FALSE &amp;&amp;*/</span> iCount &lt; 100 &amp;&amp; ScsiBusBusy();
+		iCount++)
+		;
+	} <span class="enscript-comment">/* The getTries loop */</span>
+	<span class="enscript-keyword">if</span> (status != noErr) {
+	    <span class="enscript-comment">/*
+	     * The SCSI Manager thinks the bus is not busy and not selected,
+	     * but &quot;someone&quot; has set its internal semaphore that signals
+	     * that the SCSI Manager itself is busy. The application will have
+	     * to handle this problem. (We tried getTries * 4 times).
+	     */</span>
+	    status = scsiBusy;
+	    <span class="enscript-keyword">goto</span> <span class="enscript-reference">exit</span>;
+	}
+	<span class="enscript-comment">/*
+	 * We now own the SCSI bus. Try to select the device.
+	 */</span>
+	<span class="enscript-keyword">if</span> ((status = SCSISelect(scsiDevice.targetID)) != noErr) {
+	    <span class="enscript-keyword">switch</span> (status) {
+	    <span class="enscript-comment">/*
+	     * We get scBadParmsErr if we try to arbitrate for the initiator.
+	     */</span>
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scBadParmsErr</span>: status = scsiTIDInvalid;        <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scCommErr</span>:     status = scsiDeviceNotThere;    <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scArbNBErr</span>:    status = scsiBusy;              <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scSequenceErr</span>: status = scsiRequestInvalid;    <span class="enscript-keyword">break</span>;
+	    }
+	    <span class="enscript-keyword">goto</span> <span class="enscript-reference">exit</span>;
+	}
+	<span class="enscript-comment">/*
+	 * From this point on, we must exit through SCSIComplete() even if an
+	 * error is detected. Send a command to the selected device. There are
+	 * several failure modes, including an illegal command (such as a
+	 * write to a read-only device). If the command failed because of
+	 * &quot;device busy&quot;, we will try it again.
+	 */</span>
+	status = SCSICmd((Ptr) scsiCommand, scsiCommandLen);
+	<span class="enscript-keyword">if</span> (status != noErr) {
+	    <span class="enscript-keyword">switch</span> (status) {
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scCommErr</span>:     status = scsiCommandTimeout;    <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scPhaseErr</span>:    status = scsiSequenceFailed;    <span class="enscript-keyword">break</span>;
+	    }
+	}
+	<span class="enscript-keyword">if</span> (status == noErr &amp;&amp; dataBuffer != NULL) {
+	    <span class="enscript-comment">/*
+	     * This command requires a data transfer.
+	     */</span>
+	    <span class="enscript-keyword">if</span> (scsiFlags == scsiDirectionOut) {
+		status = SCSIWrite((Ptr) tib);
+	    } <span class="enscript-keyword">else</span> {
+		status = SCSIRead((Ptr) tib);
+	    }
+	    <span class="enscript-keyword">switch</span> (status) {
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scCommErr</span>:     status = scsiCommandTimeout;        <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scBadParmsErr</span>: status = scsiRequestInvalid;        <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scPhaseErr</span>:    status = noErr; <span class="enscript-comment">/* Don't care */</span>    <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scCompareErr</span>:                  <span class="enscript-comment">/* Can't happen */</span>  <span class="enscript-keyword">break</span>;
+	    }
+	}
+	<span class="enscript-comment">/*
+	 * SCSIComplete &quot;runs&quot; the bus-phase algorithm until the bitter end,
+	 * returning the status and command-completion message bytes..
+	 */</span>
+	completionStatus = SCSIComplete(
+	    &amp;scsiStatusByte,
+	    &amp;scsiMsgByte,
+	    5 * 60L
+	    );
+	<span class="enscript-keyword">if</span> (status == noErr &amp;&amp; completionStatus != noErr) {
+	    <span class="enscript-keyword">switch</span> (completionStatus) {
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scCommErr</span>:         status = scsiCommandTimeout;    <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scPhaseErr</span>:        status = scsiSequenceFailed;    <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">scComplPhaseErr</span>:   status = scsiSequenceFailed;    <span class="enscript-keyword">break</span>;
+	    }
+	}
+	<span class="enscript-keyword">if</span> (completionStatus == noErr &amp;&amp; scsiStatusByte == kScsiStatusBusy) {
+	    <span class="enscript-comment">/*
+	     * ScsiComplete is happy. If the device is busy,
+	     * pause for 1/4 second and try again.
+	     */</span>
+	    watchdog = TickCount() + 15;
+	    <span class="enscript-keyword">while</span> (TickCount() &lt; watchdog)
+		;
+	    <span class="enscript-keyword">continue</span>;               <span class="enscript-comment">/* Do next totalTries attempt       */</span>
+	}
+	<span class="enscript-comment">/*
+	 * This is the normal exit (success) or final failure exit.
+	 */</span>
+	<span class="enscript-keyword">break</span>;
+    } <span class="enscript-comment">/* totalTries loop */</span>
+<span class="enscript-reference">exit</span>:
+
+    <span class="enscript-keyword">if</span> (bufferHoldFlag) {
+	(<span class="enscript-type">void</span>) UnholdMemory(dataBuffer, dataLength);
+    }
+    <span class="enscript-comment">/*
+     * Return the number of bytes transferred to the caller. If the caller
+     * supplied an actual count and the count is no greater than the maximum,
+     * ignore any phase errors.
+     */</span>
+    <span class="enscript-keyword">if</span> (actualTransferCount != NULL) {
+	*actualTransferCount = myTransferCount;
+	<span class="enscript-keyword">if</span> (*actualTransferCount &gt; dataLength) {
+	    *actualTransferCount = dataLength;
+	}
+    }
+    <span class="enscript-comment">/*
+     * Also, there is a bug in the combination of System 7.0.1 and the 53C96
+     * that may cause the real SCSI Status Byte to be in the Message byte.
+     */</span>
+    <span class="enscript-keyword">if</span> (scsiStatusByte == kScsiStatusGood
+	    &amp;&amp; scsiMsgByte == kScsiStatusCheckCondition) {
+	scsiStatusByte = kScsiStatusCheckCondition;
+    }
+    <span class="enscript-keyword">if</span> (status == noErr) {
+	<span class="enscript-keyword">switch</span> (scsiStatusByte) {
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">kScsiStatusGood</span>:                               <span class="enscript-keyword">break</span>;
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">kScsiStatusBusy</span>:   status = scsiBusy;          <span class="enscript-keyword">break</span>;
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">0xFF</span>:              status = scsiProvideFail;   <span class="enscript-keyword">break</span>;
+	<span class="enscript-reference">default</span>:                status = scsiNonZeroStatus; <span class="enscript-keyword">break</span>;
+	}
+    }
+    <span class="enscript-keyword">if</span> (status == noErr
+	    &amp;&amp; (scsiFlags &amp; scsiDirectionMask) != scsiDirectionNone
+	    &amp;&amp; myTransferCount != dataLength) {
+	status = scsiDataRunError;
+    }        
+    <span class="enscript-keyword">if</span> (scsiStatusBytePtr != NULL) {
+	*scsiStatusBytePtr = scsiStatusByte;
+    }
+    <span class="enscript-keyword">return</span> (status);
+}
+
+
+UInt16
+<span class="enscript-function-name">GetCommandLength</span>(
+    <span class="enscript-type">const</span> SCSI_CommandPtr   cmdPtr
+    )
+{
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">short</span>          result;
+    <span class="enscript-comment">/*
+     * Look at the &quot;group code&quot; in the command operation. Return zero
+     * error for the reserved (3, 4) and vendor-specific command (6, 7)
+     * command groups. Otherwise, set the command length from the group code
+     * value as specified in the SCSI-II spec.
+     */</span>
+    <span class="enscript-keyword">switch</span> (cmdPtr-&gt;scsi6.opcode &amp; 0xE0) {
+    <span class="enscript-keyword">case</span> (0 &lt;&lt; 5):  result = 6;     <span class="enscript-keyword">break</span>;
+    <span class="enscript-keyword">case</span> (1 &lt;&lt; 5):
+    <span class="enscript-keyword">case</span> (2 &lt;&lt; 5):  result = 10;    <span class="enscript-keyword">break</span>;
+    <span class="enscript-keyword">case</span> (5 &lt;&lt; 5):  result = 12;    <span class="enscript-keyword">break</span>;
+    <span class="enscript-reference">default</span>:        result = 0;     <span class="enscript-keyword">break</span>;
+    }
+    <span class="enscript-keyword">return</span> (result);
+}
+
+
+Boolean
+<span class="enscript-function-name">IsVirtualMemoryRunning</span>(<span class="enscript-type">void</span>)
+{
+    OSErr                       status;
+    <span class="enscript-type">long</span>                        response;
+    
+    status = Gestalt(gestaltVMAttr, &amp;response);
+    <span class="enscript-comment">/*
+     * VM is active iff Gestalt succeeded and the response is appropriate.
+     */</span>
+    <span class="enscript-keyword">return</span> (status == noErr &amp;&amp; ((response &amp; (1 &lt;&lt; gestaltVMPresent)) != 0));
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">AllocatePB</span>()
+{
+    OSErr           status;
+    SCSIBusInquiryPB    busInquiryPB;
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">PB</span>          (busInquiryPB)
+
+    <span class="enscript-keyword">if</span> (gSCSIExecIOPBPtr == NULL) {
+	CLEAR(PB);
+	PB.scsiPBLength = <span class="enscript-keyword">sizeof</span> PB;
+	PB.scsiFunctionCode = SCSIBusInquiry;
+	PB.scsiDevice.bus = 0xFF;       <span class="enscript-comment">/* Get info about the XPT */</span>
+	status = SCSIAction((SCSI_PB *) &amp;PB);
+	<span class="enscript-keyword">if</span> (status == noErr)
+	    status = PB.scsiResult;
+	<span class="enscript-keyword">if</span> (PB.scsiHiBusID == 0xFF) {
+	    gSCSIHiBusID = -1;
+	} <span class="enscript-keyword">else</span> {
+	    gSCSIHiBusID = PB.scsiHiBusID;
+	}
+	gSCSIExecIOPBPtrLen = PB.scsiMaxIOpbSize;
+	<span class="enscript-keyword">if</span> (gSCSIExecIOPBPtrLen != 0)
+	    gSCSIExecIOPBPtr = (SCSIExecIOPB *) NewPtrClear(gSCSIExecIOPBPtrLen);
+    }
+#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">PB</span>
+}
+</pre>
+<hr />
+</body></html>

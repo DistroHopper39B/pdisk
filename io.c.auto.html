@@ -1,0 +1,488 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>io.c</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">io.c&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="io.c">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// io.c - simple io and input parsing routines
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// Written by Eryk Vershen
+</span><span class="enscript-comment">//
+</span>
+<span class="enscript-comment">/*
+ * Copyright 1996,1997,1998 by Apple Computer, Inc.
+ *              All Rights Reserved 
+ *  
+ * Permission to use, copy, modify, and distribute this software and 
+ * its documentation for any purpose and without fee is hereby granted, 
+ * provided that the above copyright notice appears in all copies and 
+ * that both the copyright notice and this permission notice appear in 
+ * supporting documentation. 
+ *  
+ * APPLE COMPUTER DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+ * FOR A PARTICULAR PURPOSE. 
+ *  
+ * IN NO EVENT SHALL APPLE COMPUTER BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+ * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
+ * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
+ * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+ */</span>
+
+<span class="enscript-comment">// for *printf()
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdio.h&gt;</span>
+
+<span class="enscript-comment">// for malloc() &amp; free()
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__linux__</span>)
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdlib.h&gt;</span>
+#<span class="enscript-reference">else</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;malloc.h&gt;</span>
+#<span class="enscript-reference">endif</span>
+<span class="enscript-comment">// for strncpy()
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;string.h&gt;</span>
+<span class="enscript-comment">// for va_start(), etc.
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdarg.h&gt;</span>
+<span class="enscript-comment">// for errno
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;errno.h&gt;</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;io.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;errors.h&quot;</span>
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Defines
+</span><span class="enscript-comment">//
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">BAD_DIGIT</span> 17	<span class="enscript-comment">/* must be greater than any base */</span>
+#<span class="enscript-reference">define</span>	<span class="enscript-variable-name">STRING_CHUNK</span>	16
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">UNGET_MAX_COUNT</span> 10
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__linux__</span>
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__unix__</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">SCSI_FD</span> 8
+#<span class="enscript-reference">endif</span>
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">NeXT</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">loff_t</span> off_t
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">llseek</span> lseek
+#<span class="enscript-reference">else</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">loff_t</span> long
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">llseek</span> lseek
+#<span class="enscript-reference">endif</span>
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Types
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Constants
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">const</span> <span class="enscript-type">long</span> kDefault = -1;
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Variables
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">short</span> unget_buf[UNGET_MAX_COUNT+1];
+<span class="enscript-type">int</span> unget_count;
+<span class="enscript-type">char</span> io_buffer[MAXIOSIZE];
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Forward declarations
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">long</span> <span class="enscript-function-name">get_number</span>(<span class="enscript-type">int</span> first_char);
+<span class="enscript-type">char</span>* <span class="enscript-function-name">get_string</span>(<span class="enscript-type">int</span> eos);
+<span class="enscript-type">int</span> <span class="enscript-function-name">my_getch</span>(<span class="enscript-type">void</span>);
+<span class="enscript-type">void</span> <span class="enscript-function-name">my_ungetch</span>(<span class="enscript-type">int</span> c);
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Routines
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">int</span>
+<span class="enscript-function-name">my_getch</span>()
+{
+    <span class="enscript-keyword">if</span> (unget_count &gt; 0) {
+	<span class="enscript-keyword">return</span> (unget_buf[--unget_count]);
+    } <span class="enscript-keyword">else</span> {
+	<span class="enscript-keyword">return</span> (getc(stdin));
+    }
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">my_ungetch</span>(<span class="enscript-type">int</span> c)
+{
+    <span class="enscript-comment">// In practice there is never more than one character in
+</span>    <span class="enscript-comment">// the unget_buf, but what's a little overkill among friends?
+</span>
+    <span class="enscript-keyword">if</span> (unget_count &lt; UNGET_MAX_COUNT) {
+	unget_buf[unget_count++] = c;
+    } <span class="enscript-keyword">else</span> {
+	fatal(-1, <span class="enscript-string">&quot;Programmer error in my_ungetch().&quot;</span>);
+    }
+}
+
+	
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">flush_to_newline</span>(<span class="enscript-type">int</span> keep_newline)
+{
+    <span class="enscript-type">int</span>		c;
+
+    <span class="enscript-keyword">for</span> (;;) {
+	c = my_getch();
+
+	<span class="enscript-keyword">if</span> (c &lt;= 0) {
+	    <span class="enscript-keyword">break</span>;
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'\n'</span>) {
+	    <span class="enscript-keyword">if</span> (keep_newline) {
+		my_ungetch(c);
+	    }
+	    <span class="enscript-keyword">break</span>;
+	} <span class="enscript-keyword">else</span> {
+	    <span class="enscript-comment">// skip
+</span>	}
+    }
+    <span class="enscript-keyword">return</span>;
+}
+
+
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">get_okay</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *prompt, <span class="enscript-type">int</span> default_value)
+{
+    <span class="enscript-type">int</span>		c;
+
+    flush_to_newline(0);
+    printf(<span class="enscript-string">&quot;%s&quot;</span>, prompt);
+
+    <span class="enscript-keyword">for</span> (;;) {
+	c = my_getch();
+
+	<span class="enscript-keyword">if</span> (c &lt;= 0) {
+	    <span class="enscript-keyword">break</span>;
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">' '</span> || c == <span class="enscript-string">'\t'</span>) {
+	    <span class="enscript-comment">// skip blanks and tabs
+</span>	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'\n'</span>) {
+	    my_ungetch(c);
+	    <span class="enscript-keyword">return</span> default_value;
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'y'</span> || c == <span class="enscript-string">'Y'</span>) {
+	    <span class="enscript-keyword">return</span> 1;
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'n'</span> || c == <span class="enscript-string">'N'</span>) {
+	    <span class="enscript-keyword">return</span> 0;
+	} <span class="enscript-keyword">else</span> {
+	    flush_to_newline(0);
+	    printf(<span class="enscript-string">&quot;%s&quot;</span>, prompt);
+	}
+    }
+    <span class="enscript-keyword">return</span> -1;
+}
+
+	
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">get_command</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *prompt, <span class="enscript-type">int</span> promptBeforeGet, <span class="enscript-type">int</span> *command)
+{
+    <span class="enscript-type">int</span>		c;
+
+    <span class="enscript-keyword">if</span> (promptBeforeGet) {
+	printf(<span class="enscript-string">&quot;%s&quot;</span>, prompt);
+    }	
+    <span class="enscript-keyword">for</span> (;;) {
+	c = my_getch();
+
+	<span class="enscript-keyword">if</span> (c &lt;= 0) {
+	    <span class="enscript-keyword">break</span>;
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">' '</span> || c == <span class="enscript-string">'\t'</span>) {
+	    <span class="enscript-comment">// skip blanks and tabs
+</span>	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'\n'</span>) {
+	    printf(<span class="enscript-string">&quot;%s&quot;</span>, prompt);
+	} <span class="enscript-keyword">else</span> {
+	    *command = c;
+	    <span class="enscript-keyword">return</span> 1;
+	}
+    }
+    <span class="enscript-keyword">return</span> 0;
+}
+
+	
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">get_number_argument</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *prompt, <span class="enscript-type">long</span> *number, <span class="enscript-type">long</span> default_value)
+{
+    <span class="enscript-type">int</span> c;
+    <span class="enscript-type">int</span> result = 0;
+
+    <span class="enscript-keyword">for</span> (;;) {
+	c = my_getch();
+
+	<span class="enscript-keyword">if</span> (c &lt;= 0) {
+	    <span class="enscript-keyword">break</span>;
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">' '</span> || c == <span class="enscript-string">'\t'</span>) {
+	    <span class="enscript-comment">// skip blanks and tabs
+</span>	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'\n'</span>) {
+	    <span class="enscript-keyword">if</span> (default_value == kDefault) {
+		printf(<span class="enscript-string">&quot;%s&quot;</span>, prompt);
+	    } <span class="enscript-keyword">else</span> {
+		my_ungetch(c);
+		*number = default_value;
+		result = 1;
+		<span class="enscript-keyword">break</span>;
+	    }
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (<span class="enscript-string">'0'</span> &lt;= c &amp;&amp; c &lt;= <span class="enscript-string">'9'</span>) {
+	    *number = get_number(c);
+	    result = 1;
+	    <span class="enscript-keyword">break</span>;
+	} <span class="enscript-keyword">else</span> {
+	    my_ungetch(c);
+	    *number = 0;
+	    <span class="enscript-keyword">break</span>;
+	}
+    }
+    <span class="enscript-keyword">return</span> result;
+}
+
+
+<span class="enscript-type">long</span>
+<span class="enscript-function-name">get_number</span>(<span class="enscript-type">int</span> first_char)
+{
+    <span class="enscript-type">register</span> <span class="enscript-type">int</span> c;
+    <span class="enscript-type">int</span> base;
+    <span class="enscript-type">int</span> digit;
+    <span class="enscript-type">int</span> ret_value;
+
+    <span class="enscript-keyword">if</span> (first_char != <span class="enscript-string">'0'</span>) {
+	c = first_char;
+	base = 10;
+	digit = BAD_DIGIT;
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> ((c=my_getch()) == <span class="enscript-string">'x'</span> || c == <span class="enscript-string">'X'</span>) {
+	c = my_getch();
+	base = 16;
+	digit = BAD_DIGIT;
+    } <span class="enscript-keyword">else</span> {
+	my_ungetch(c);
+	c = first_char;
+	base = 8;
+	digit = 0;
+    }
+    ret_value = 0;
+    <span class="enscript-keyword">for</span> (ret_value = 0; ; c = my_getch()) {
+	<span class="enscript-keyword">if</span> (c &gt;= <span class="enscript-string">'0'</span> &amp;&amp; c &lt;= <span class="enscript-string">'9'</span>) {
+	    digit = c - <span class="enscript-string">'0'</span>;
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c &gt;=<span class="enscript-string">'A'</span> &amp;&amp; c &lt;= <span class="enscript-string">'F'</span>) {
+	    digit = 10 + (c - <span class="enscript-string">'A'</span>);
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c &gt;=<span class="enscript-string">'a'</span> &amp;&amp; c &lt;= <span class="enscript-string">'f'</span>) {
+	    digit = 10 + (c - <span class="enscript-string">'a'</span>);
+	} <span class="enscript-keyword">else</span> {
+	    digit = BAD_DIGIT;
+	}
+	<span class="enscript-keyword">if</span> (digit &gt;= base) {
+	    <span class="enscript-keyword">break</span>;
+	}
+	ret_value = ret_value * base + digit;
+    }
+    my_ungetch(c);
+    <span class="enscript-keyword">return</span>(ret_value);
+}
+
+	
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">get_string_argument</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *prompt, <span class="enscript-type">char</span> **string, <span class="enscript-type">int</span> reprompt)
+{
+    <span class="enscript-type">int</span> c;
+    <span class="enscript-type">int</span> result = 0;
+
+    <span class="enscript-keyword">for</span> (;;) {
+	c = my_getch();
+
+	<span class="enscript-keyword">if</span> (c &lt;= 0) {
+	    <span class="enscript-keyword">break</span>;
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">' '</span> || c == <span class="enscript-string">'\t'</span>) {
+	    <span class="enscript-comment">// skip blanks and tabs
+</span>	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'\n'</span>) {
+	    <span class="enscript-keyword">if</span> (reprompt) {
+		printf(<span class="enscript-string">&quot;%s&quot;</span>, prompt);
+	    } <span class="enscript-keyword">else</span> {
+		my_ungetch(c);
+		*string = NULL;
+		<span class="enscript-keyword">break</span>;
+	    }
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'&quot;'</span> || c == <span class="enscript-string">'\''</span>) {
+	    *string = get_string(c);
+	    result = 1;
+	    <span class="enscript-keyword">break</span>;
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> ((<span class="enscript-string">'a'</span> &lt;= c &amp;&amp; c &lt;= <span class="enscript-string">'z'</span>) || (<span class="enscript-string">'A'</span> &lt;= c &amp;&amp; c &lt;= <span class="enscript-string">'Z'</span>)
+		|| (c == <span class="enscript-string">'-'</span> || c == <span class="enscript-string">'/'</span> || c == <span class="enscript-string">'.'</span> || c == <span class="enscript-string">':'</span>)) {
+	    my_ungetch(c);
+	    *string = get_string(<span class="enscript-string">' '</span>);
+	    result = 1;
+	    <span class="enscript-keyword">break</span>;
+	} <span class="enscript-keyword">else</span> {
+	    my_ungetch(c);
+	    *string = NULL;
+	    <span class="enscript-keyword">break</span>;
+	}
+    }
+    <span class="enscript-keyword">return</span> result;
+}
+
+
+<span class="enscript-type">char</span> *
+<span class="enscript-function-name">get_string</span>(<span class="enscript-type">int</span> eos)
+{
+    <span class="enscript-type">int</span> c;
+    <span class="enscript-type">char</span> *s;
+    <span class="enscript-type">char</span> *ret_value;
+    <span class="enscript-type">char</span> *limit;
+    <span class="enscript-type">int</span> length;
+
+    ret_value = (<span class="enscript-type">char</span> *) malloc(STRING_CHUNK);
+    <span class="enscript-keyword">if</span> (ret_value == NULL) {
+	error(errno, <span class="enscript-string">&quot;can't allocate memory for string buffer&quot;</span>);
+	<span class="enscript-keyword">return</span> NULL;
+    }
+    length = STRING_CHUNK;
+    limit = ret_value + length;
+
+    c = my_getch();
+    <span class="enscript-keyword">for</span> (s = ret_value; ; c = my_getch()) {
+	<span class="enscript-keyword">if</span> (s &gt;= limit) {
+	    <span class="enscript-comment">// expand string
+</span>	    limit = (<span class="enscript-type">char</span> *) malloc(length+STRING_CHUNK);
+	    <span class="enscript-keyword">if</span> (limit == NULL) {
+		error(errno, <span class="enscript-string">&quot;can't allocate memory for string buffer&quot;</span>);
+		ret_value[length-1] = 0;
+		<span class="enscript-keyword">break</span>;
+	    }
+	    strncpy(limit, ret_value, length);
+	    free(ret_value);
+	    s = limit + (s - ret_value);
+	    ret_value = limit;
+	    length += STRING_CHUNK;
+	    limit = ret_value + length;
+	}
+	<span class="enscript-keyword">if</span> (c &lt;= 0 || c == eos || (eos == <span class="enscript-string">' '</span> &amp;&amp; c == <span class="enscript-string">'\t'</span>)) {
+	    *s++ = 0;
+	    <span class="enscript-keyword">break</span>;
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'\n'</span>) {
+	    *s++ = 0;
+	    my_ungetch(c);
+	    <span class="enscript-keyword">break</span>;
+	} <span class="enscript-keyword">else</span> {
+	    *s++ = c;
+	}
+    }
+    <span class="enscript-keyword">return</span>(ret_value);
+}
+
+
+<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>
+<span class="enscript-function-name">get_multiplier</span>(<span class="enscript-type">long</span> divisor)
+{
+    <span class="enscript-type">int</span> c;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> result;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> extra;
+
+    c = my_getch();
+
+    extra = 1;
+    <span class="enscript-keyword">if</span> (c &lt;= 0 || divisor &lt;= 0) {
+	result = 0;
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'t'</span> || c == <span class="enscript-string">'T'</span>) {
+	result = 1024*1024;
+	extra = 1024*1024;
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'g'</span> || c == <span class="enscript-string">'G'</span>) {
+	result = 1024*1024*1024;
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'m'</span> || c == <span class="enscript-string">'M'</span>) {
+	result = 1024*1024;
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'k'</span> || c == <span class="enscript-string">'K'</span>) {
+	result = 1024;
+    } <span class="enscript-keyword">else</span> {
+	my_ungetch(c);
+	result = 1;
+    }
+    <span class="enscript-keyword">if</span> (result &gt; 1) {
+	<span class="enscript-keyword">if</span> (extra &gt; 1) {
+	    result /= divisor;
+	    <span class="enscript-keyword">if</span> (result &gt;= 4096) {
+		<span class="enscript-comment">/* overflow -&gt; 20bits + &gt;12bits */</span>
+		result = 0;
+	    } <span class="enscript-keyword">else</span> {
+		result *= extra;
+	    }
+	} <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> ((<span class="enscript-type">long</span> <span class="enscript-type">long</span>)result &gt;= divisor) {
+	    result /= divisor;
+	} <span class="enscript-keyword">else</span> {
+	    result = 1;
+	}
+    }
+    <span class="enscript-keyword">return</span> result;
+}
+
+
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">get_partition_modifier</span>(<span class="enscript-type">void</span>)
+{
+    <span class="enscript-type">int</span> c;
+    <span class="enscript-type">int</span> result;
+
+    result = 0;
+
+    c = my_getch();
+
+    <span class="enscript-keyword">if</span> (c == <span class="enscript-string">'p'</span> || c == <span class="enscript-string">'P'</span>) {
+    	result = 1;
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (c &gt; 0) {
+	my_ungetch(c);
+    }
+    <span class="enscript-keyword">return</span> result;
+}
+
+
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">number_of_digits</span>(<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> value)
+{
+    <span class="enscript-type">int</span> j;
+
+    j = 1;
+    <span class="enscript-keyword">while</span> (value &gt; 9) {
+	j++;
+	value = value / 10;
+    }
+    <span class="enscript-keyword">return</span> j;
+}
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Print a message on standard error &amp; flush the input.
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">void</span>
+<span class="enscript-function-name">bad_input</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fprintf(stderr, <span class="enscript-string">&quot;\n&quot;</span>);
+    flush_to_newline(1);
+}
+</pre>
+<hr />
+</body></html>

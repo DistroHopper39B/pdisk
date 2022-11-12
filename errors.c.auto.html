@@ -1,0 +1,208 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>errors.c</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">errors.c&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="errors.c">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// errors.c - error &amp; help routines
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// Written by Eryk Vershen
+</span><span class="enscript-comment">//
+</span>
+<span class="enscript-comment">/*
+ * Copyright 1996,1997,1998 by Apple Computer, Inc.
+ *              All Rights Reserved 
+ *  
+ * Permission to use, copy, modify, and distribute this software and 
+ * its documentation for any purpose and without fee is hereby granted, 
+ * provided that the above copyright notice appears in all copies and 
+ * that both the copyright notice and this permission notice appear in 
+ * supporting documentation. 
+ *  
+ * APPLE COMPUTER DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+ * FOR A PARTICULAR PURPOSE. 
+ *  
+ * IN NO EVENT SHALL APPLE COMPUTER BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+ * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
+ * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
+ * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+ */</span>
+
+<span class="enscript-comment">// for *printf()
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdio.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;errno.h&gt;</span>
+
+<span class="enscript-comment">// for exit()
+</span>#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__linux__</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdlib.h&gt;</span>
+#<span class="enscript-reference">endif</span>
+<span class="enscript-comment">// for strrchr
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;string.h&gt;</span>
+
+<span class="enscript-comment">// for va_start(), etc.
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdarg.h&gt;</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;errors.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;cmdline.h&quot;</span>
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Defines
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Types
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Constants
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Variables
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">char</span> *program_name;
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">NeXT</span>
+<span class="enscript-type">extern</span> <span class="enscript-type">int</span> errno;
+<span class="enscript-type">extern</span> <span class="enscript-type">int</span> sys_nerr;
+<span class="enscript-type">extern</span> <span class="enscript-type">const</span> <span class="enscript-type">char</span> * <span class="enscript-type">const</span> sys_errlist[];
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Forward declarations
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Routines
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">void</span>
+<span class="enscript-function-name">init_program_name</span>(<span class="enscript-type">char</span> **argv)
+{
+#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__linux__</span>) || <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__unix__</span>)
+    <span class="enscript-keyword">if</span> ((program_name = strrchr(argv[0], <span class="enscript-string">'/'</span>)) != (<span class="enscript-type">char</span> *)NULL) {
+	program_name++;
+    } <span class="enscript-keyword">else</span> {
+	program_name = argv[0];
+    }
+#<span class="enscript-reference">else</span>
+    program_name = <span class="enscript-string">&quot;pdisk&quot;</span>;
+#<span class="enscript-reference">endif</span>
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">do_help</span>()
+{
+    fprintf(stderr, <span class="enscript-string">&quot;usage:&quot;</span>);
+    fprintf(stderr, <span class="enscript-string">&quot;\t%s [-h|--help]\n&quot;</span>, program_name);
+    fprintf(stderr, <span class="enscript-string">&quot;\t%s [-i|--interactive]\n&quot;</span>, program_name);
+#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__linux__</span>) || <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__APPLE__</span>)
+    fprintf(stderr, <span class="enscript-string">&quot;\t%s [-l|--list] [name] [...]\n&quot;</span>, program_name);
+#<span class="enscript-reference">else</span>
+    fprintf(stderr, <span class="enscript-string">&quot;\t%s [-l|--list] name [...]\n&quot;</span>, program_name);
+#<span class="enscript-reference">endif</span>
+    fprintf(stderr, <span class="enscript-string">&quot;\t%s [-r|--readonly] name [...]\n&quot;</span>, program_name);
+    fprintf(stderr, <span class="enscript-string">&quot;\t%s [-v|--version]\n&quot;</span>, program_name);
+    fprintf(stderr, <span class="enscript-string">&quot;\t%s name [...]\n&quot;</span>, program_name);
+    fprintf(stderr, <span class="enscript-string">&quot;\t%s name command\n&quot;</span>, program_name);
+<span class="enscript-comment">/*
+	{&quot;debug&quot;,	no_argument,		0,	'd'},
+	{&quot;abbr&quot;,	no_argument,		0,	'a'},
+	{&quot;fs&quot;,		no_argument,		0,	'f'},
+	{&quot;logical&quot;,	no_argument,		0,	kLogicalOption},
+	{&quot;compute_size&quot;, no_argument,		0,	'c'},
+*/</span>
+    fprintf(stderr, <span class="enscript-string">&quot;\n&quot;</span>);
+    do_command_help();
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">usage</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *kind)
+{
+    error(-1, <span class="enscript-string">&quot;bad usage - %s\n&quot;</span>, kind);
+    hflag = 1;
+}
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Print a message on standard error and exit with value.
+</span><span class="enscript-comment">// Values in the range of system error numbers will add
+</span><span class="enscript-comment">// the perror(3) message.
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">void</span>
+<span class="enscript-function-name">fatal</span>(<span class="enscript-type">int</span> value, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *fmt, ...)
+{
+    va_list ap;
+
+    fprintf(stderr, <span class="enscript-string">&quot;%s: &quot;</span>, program_name);
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+
+#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__linux__</span>) || <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">NeXT</span>) || <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__unix__</span>)
+    <span class="enscript-keyword">if</span> (value &gt; 0 &amp;&amp; value &lt; sys_nerr) {
+	fprintf(stderr, <span class="enscript-string">&quot;  (%s)\n&quot;</span>, sys_errlist[value]);
+    } <span class="enscript-keyword">else</span> {
+	fprintf(stderr, <span class="enscript-string">&quot;\n&quot;</span>);
+    }
+#<span class="enscript-reference">else</span>
+    fprintf(stderr, <span class="enscript-string">&quot;\n&quot;</span>);
+    printf(<span class="enscript-string">&quot;Processing stopped: Choose 'Quit' from the file menu to quit.\n\n&quot;</span>);
+#<span class="enscript-reference">endif</span>
+    exit(value);
+}
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Print a message on standard error.
+</span><span class="enscript-comment">// Values in the range of system error numbers will add
+</span><span class="enscript-comment">// the perror(3) message.
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">void</span>
+<span class="enscript-function-name">error</span>(<span class="enscript-type">int</span> value, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *fmt, ...)
+{
+    va_list ap;
+
+    fprintf(stderr, <span class="enscript-string">&quot;%s: &quot;</span>, program_name);
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+
+#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__linux__</span>) || <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">NeXT</span>) || <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__unix__</span>)
+    <span class="enscript-keyword">if</span> (value &gt; 0 &amp;&amp; value &lt; sys_nerr) {
+	fprintf(stderr, <span class="enscript-string">&quot;  (%s)\n&quot;</span>, sys_errlist[value]);
+    } <span class="enscript-keyword">else</span> {
+	fprintf(stderr, <span class="enscript-string">&quot;\n&quot;</span>);
+    }
+#<span class="enscript-reference">else</span>
+    fprintf(stderr, <span class="enscript-string">&quot;\n&quot;</span>);
+#<span class="enscript-reference">endif</span>
+}
+</pre>
+<hr />
+</body></html>

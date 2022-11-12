@@ -1,0 +1,205 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>layout_dump.c</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">layout_dump.c&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="layout_dump.c">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * layout_dump.c -
+ *
+ * Written by Eryk Vershen
+ */</span>
+
+<span class="enscript-comment">/*
+ * Copyright 1996,1997 by Apple Computer, Inc.
+ *              All Rights Reserved 
+ *  
+ * Permission to use, copy, modify, and distribute this software and 
+ * its documentation for any purpose and without fee is hereby granted, 
+ * provided that the above copyright notice appears in all copies and 
+ * that both the copyright notice and this permission notice appear in 
+ * supporting documentation. 
+ *  
+ * APPLE COMPUTER DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+ * FOR A PARTICULAR PURPOSE. 
+ *  
+ * IN NO EVENT SHALL APPLE COMPUTER BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+ * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
+ * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
+ * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+ */</span>
+
+<span class="enscript-comment">// for printf()
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdio.h&gt;</span>
+<span class="enscript-comment">// for strlen()
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;string.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;layout_dump.h&quot;</span>
+
+
+<span class="enscript-comment">/*
+ * Defines
+ */</span>
+
+
+<span class="enscript-comment">/*
+ * Types
+ */</span>
+
+
+<span class="enscript-comment">/*
+ * Global Constants
+ */</span>
+<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> bitmasks[] = {
+    0x01, 0x03, 0x07, 0x0F,
+    0x1F, 0x3F, 0x7F, 0xFF
+};
+
+
+<span class="enscript-comment">/*
+ * Global Variables
+ */</span>
+
+
+<span class="enscript-comment">/*
+ * Forward declarations
+ */</span>
+
+
+<span class="enscript-comment">/*
+ * Routines
+ */</span>
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">dump_using_layout</span>(<span class="enscript-type">void</span> *buffer, layout *desc)
+{
+    layout *entry;
+    <span class="enscript-type">int</span> byte_length;
+    <span class="enscript-type">long</span>    value;
+    <span class="enscript-type">int</span> max_name;
+    <span class="enscript-type">int</span> i;
+    
+    max_name = 0;
+    <span class="enscript-keyword">for</span> (entry = desc; entry-&gt;format != kEnd; entry++) {
+	value = strlen(entry-&gt;name);
+	<span class="enscript-keyword">if</span> (value &gt; max_name) {
+	    max_name = value;
+	}
+    }
+    
+    
+    <span class="enscript-keyword">for</span> (entry = desc; entry-&gt;format != kEnd; entry++) {
+
+	<span class="enscript-keyword">if</span> (entry-&gt;format != kBit) {
+	    printf(<span class="enscript-string">&quot;%*s: &quot;</span>, max_name, entry-&gt;name);
+	
+	    byte_length = entry-&gt;bit_length / 8;
+	    
+	    <span class="enscript-keyword">if</span> (entry-&gt;bit_offset != 0 || (entry-&gt;bit_length % 8) != 0) {
+		printf(<span class="enscript-string">&quot;entry %d, can't handle bitfields yet.\n&quot;</span>, entry - desc);
+		<span class="enscript-keyword">continue</span>;
+	    }
+	    
+	    value = 0;
+	    <span class="enscript-keyword">for</span> (i = entry-&gt;byte_offset; byte_length &gt; 0;i++) {
+		value = value &lt;&lt; 8;
+		value |= ((<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *)buffer)[i];
+		byte_length--;
+	    }
+	} <span class="enscript-keyword">else</span> {
+	    <span class="enscript-keyword">if</span> (entry-&gt;bit_offset &lt; 0 || entry-&gt;bit_offset &gt; 8) {
+		printf(<span class="enscript-string">&quot;entry %d, bad bit offset (%d).\n&quot;</span>, entry - desc, entry-&gt;bit_offset);
+		<span class="enscript-keyword">continue</span>;
+	    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (entry-&gt;bit_length &lt;= 0 
+		    || entry-&gt;bit_length &gt; (entry-&gt;bit_offset + 1)) {
+		printf(<span class="enscript-string">&quot;entry %d, bad bit length (%d,%d).\n&quot;</span>, entry - desc,
+			entry-&gt;bit_offset, entry-&gt;bit_length);
+		<span class="enscript-keyword">continue</span>;
+	    }
+	    value = (((<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *)buffer)[entry-&gt;byte_offset]
+		    &amp; bitmasks[entry-&gt;bit_offset])
+		    &gt;&gt; ((entry-&gt;bit_offset + 1) - entry-&gt;bit_length);
+	}
+	
+	<span class="enscript-keyword">switch</span> (entry-&gt;format) {
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">kHex</span>:
+	    printf(<span class="enscript-string">&quot;0x%x\n&quot;</span>, (<span class="enscript-type">unsigned</span> <span class="enscript-type">int</span>) value);
+	    <span class="enscript-keyword">break</span>;
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">kDec</span>:
+	    byte_length = entry-&gt;bit_length / 8;
+	    <span class="enscript-keyword">switch</span> (byte_length) {
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">4</span>: printf(<span class="enscript-string">&quot;%ld\n&quot;</span>, (<span class="enscript-type">signed</span> <span class="enscript-type">long</span>)value); <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">2</span>: printf(<span class="enscript-string">&quot;%d\n&quot;</span>, (<span class="enscript-type">signed</span> <span class="enscript-type">short</span>)value); <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">1</span>: printf(<span class="enscript-string">&quot;%d\n&quot;</span>, (<span class="enscript-type">signed</span> <span class="enscript-type">char</span>)value); <span class="enscript-keyword">break</span>;
+	    }
+	    <span class="enscript-keyword">break</span>;
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">kUns</span>:
+	    byte_length = entry-&gt;bit_length / 8;
+	    <span class="enscript-keyword">switch</span> (byte_length) {
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">4</span>: printf(<span class="enscript-string">&quot;%lu\n&quot;</span>, (<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>)value); <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">2</span>: printf(<span class="enscript-string">&quot;%u\n&quot;</span>, (<span class="enscript-type">unsigned</span> <span class="enscript-type">short</span>)value); <span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">1</span>: printf(<span class="enscript-string">&quot;%u\n&quot;</span>, (<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>)value); <span class="enscript-keyword">break</span>;
+	    }
+	    <span class="enscript-keyword">break</span>;
+	<span class="enscript-keyword">case</span> <span class="enscript-reference">kBit</span>:
+	    <span class="enscript-keyword">if</span> (value) {
+		printf(<span class="enscript-string">&quot;%*s  %s\n&quot;</span>, max_name, <span class="enscript-string">&quot;&quot;</span>, entry-&gt;name);
+	    }
+	    <span class="enscript-keyword">break</span>;
+	<span class="enscript-reference">default</span>:
+	    printf(<span class="enscript-string">&quot;entry %d, unknown format (%d).\n&quot;</span>, entry - desc, entry-&gt;format);
+	    <span class="enscript-keyword">break</span>;
+	}
+    }
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">DumpRawBuffer</span>(<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *bufferPtr, <span class="enscript-type">int</span> length )
+{
+	<span class="enscript-type">register</span> <span class="enscript-type">int</span>            i;
+	<span class="enscript-type">int</span>                     lineStart;
+	<span class="enscript-type">int</span>                     lineLength;
+	<span class="enscript-type">short</span>                   c;
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kLineSize</span>   16
+	<span class="enscript-keyword">for</span> (lineStart = 0; lineStart &lt; length; lineStart += lineLength) {
+	    lineLength = kLineSize;
+	    <span class="enscript-keyword">if</span> (lineStart + lineLength &gt; length)
+		lineLength = length - lineStart;
+	    printf(<span class="enscript-string">&quot;%03x %3d:&quot;</span>, lineStart, lineStart);
+	    <span class="enscript-keyword">for</span> (i = 0; i &lt; lineLength; i++)
+		printf(<span class="enscript-string">&quot; %02x&quot;</span>, bufferPtr[lineStart + i] &amp; 0xFF);
+	    <span class="enscript-keyword">for</span> (; i &lt; kLineSize; i++)
+		printf(<span class="enscript-string">&quot;   &quot;</span>);
+	    printf(<span class="enscript-string">&quot;  &quot;</span>);
+	    <span class="enscript-keyword">for</span> (i = 0; i &lt; lineLength; i++) {
+		c = bufferPtr[lineStart + i] &amp; 0xFF;
+		<span class="enscript-keyword">if</span> (c &gt; <span class="enscript-string">' '</span> &amp;&amp; c &lt; <span class="enscript-string">'~'</span>)
+		    printf(<span class="enscript-string">&quot;%c&quot;</span>, c);
+		<span class="enscript-keyword">else</span> {
+		    printf(<span class="enscript-string">&quot;.&quot;</span>);
+		}
+	    }
+	    printf(<span class="enscript-string">&quot;\n&quot;</span>);
+	}
+}
+</pre>
+<hr />
+</body></html>

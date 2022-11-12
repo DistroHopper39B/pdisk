@@ -1,0 +1,126 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>bitfield.c</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">bitfield.c&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="bitfield.c">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// bitfield.c - extract and set bit fields
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// Written by Eryk Vershen
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// See comments in bitfield.h
+</span><span class="enscript-comment">//
+</span>
+<span class="enscript-comment">/*
+ * Copyright 1996, 1997 by Apple Computer, Inc.
+ *              All Rights Reserved 
+ *  
+ * Permission to use, copy, modify, and distribute this software and 
+ * its documentation for any purpose and without fee is hereby granted, 
+ * provided that the above copyright notice appears in all copies and 
+ * that both the copyright notice and this permission notice appear in 
+ * supporting documentation. 
+ *  
+ * APPLE COMPUTER DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+ * FOR A PARTICULAR PURPOSE. 
+ *  
+ * IN NO EVENT SHALL APPLE COMPUTER BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+ * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
+ * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
+ * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+ */</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;bitfield.h&quot;</span>
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Defines
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Types
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Constants
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">const</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> masks[] = {
+    0x00000000,
+    0x00000001, 0x00000003, 0x00000007, 0x0000000F,
+    0x0000001F, 0x0000003F, 0x0000007F, 0x000000FF,
+    0x000001FF, 0x000003FF, 0x000007FF, 0x00000FFF,
+    0x00001FFF, 0x00003FFF, 0x00007FFF, 0x0000FFFF,
+    0x0001FFFF, 0x0003FFFF, 0x0007FFFF, 0x000FFFFF,
+    0x001FFFFF, 0x003FFFFF, 0x007FFFFF, 0x00FFFFFF,
+    0x01FFFFFF, 0x03FFFFFF, 0x07FFFFFF, 0x0FFFFFFF,
+    0x1FFFFFFF, 0x3FFFFFFF, 0x7FFFFFFF, 0xFFFFFFFF
+};
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Variables
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Forward declarations
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Routines
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">unsigned</span> <span class="enscript-type">int</span>
+<span class="enscript-function-name">bitfield_set</span>(<span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> *bf, <span class="enscript-type">int</span> base, <span class="enscript-type">int</span> length, <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> value)
+{
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> t;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> m;
+    <span class="enscript-type">int</span> s;
+
+    <span class="enscript-comment">// compute shift &amp; mask, coerce value to correct number of bits,
+</span>    <span class="enscript-comment">// zap the old bits and stuff the new value
+</span>    <span class="enscript-comment">// return the masked value in case someone wants it.
+</span>    s = (base + 1) - length;
+    m = masks[length];
+    t = value &amp; m;
+    *bf = (*bf &amp; ~(m &lt;&lt; s)) | (t &lt;&lt; s);
+    <span class="enscript-keyword">return</span> t;
+}
+
+
+<span class="enscript-type">unsigned</span> <span class="enscript-type">int</span>
+<span class="enscript-function-name">bitfield_get</span>(<span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> bf, <span class="enscript-type">int</span> base, <span class="enscript-type">int</span> length)
+{
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> m;
+    <span class="enscript-type">int</span> s;
+
+    <span class="enscript-comment">// compute shift &amp; mask
+</span>    <span class="enscript-comment">// return the correct number of bits (shifted to low end)
+</span>    s = (base + 1) - length;
+    m = masks[length];
+    <span class="enscript-keyword">return</span> ((bf &gt;&gt; s) &amp; m);
+}
+</pre>
+<hr />
+</body></html>

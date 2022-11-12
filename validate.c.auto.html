@@ -1,0 +1,532 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>validate.c</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">validate.c&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="validate.c">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// validate.c - 
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// Written by Eryk Vershen
+</span><span class="enscript-comment">//
+</span>
+<span class="enscript-comment">/*
+ * Copyright 1997,1998 by Apple Computer, Inc.
+ *              All Rights Reserved 
+ *  
+ * Permission to use, copy, modify, and distribute this software and 
+ * its documentation for any purpose and without fee is hereby granted, 
+ * provided that the above copyright notice appears in all copies and 
+ * that both the copyright notice and this permission notice appear in 
+ * supporting documentation. 
+ *  
+ * APPLE COMPUTER DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+ * FOR A PARTICULAR PURPOSE. 
+ *  
+ * IN NO EVENT SHALL APPLE COMPUTER BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+ * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
+ * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
+ * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+ */</span>
+
+
+<span class="enscript-comment">// for *printf()
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdio.h&gt;</span>
+<span class="enscript-comment">// for malloc(), free()
+</span>#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__linux__</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdlib.h&gt;</span>
+#<span class="enscript-reference">else</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;malloc.h&gt;</span>
+#<span class="enscript-reference">endif</span>
+<span class="enscript-comment">// for O_RDONLY
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;fcntl.h&gt;</span>
+<span class="enscript-comment">// for errno
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;errno.h&gt;</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;validate.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;deblock_media.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;pathname.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;convert.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;io.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;errors.h&quot;</span>
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Defines
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Types
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">enum</span> range_state {
+    kUnallocated,
+    kAllocated,
+    kMultiplyAllocated
+};
+
+<span class="enscript-type">struct</span> range_list {
+    <span class="enscript-type">struct</span> range_list *next;
+    <span class="enscript-type">struct</span> range_list *prev;
+    <span class="enscript-type">enum</span> range_state state;
+    <span class="enscript-type">int</span> valid;
+    u32 start;
+    u32 end;
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> range_list range_list;
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Constants
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Variables
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">static</span> <span class="enscript-type">char</span> *buffer;
+<span class="enscript-type">static</span> Block0 *b0;
+<span class="enscript-type">static</span> DPME *mb;
+<span class="enscript-type">static</span> partition_map_header *the_map;
+<span class="enscript-type">static</span> MEDIA the_media;
+<span class="enscript-type">static</span> <span class="enscript-type">int</span> g;
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Forward declarations
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">int</span> <span class="enscript-function-name">get_block_zero</span>(<span class="enscript-type">void</span>);
+<span class="enscript-type">int</span> <span class="enscript-function-name">get_block_n</span>(<span class="enscript-type">int</span> n);
+range_list *<span class="enscript-function-name">new_range_list_item</span>(<span class="enscript-type">enum</span> range_state state, <span class="enscript-type">int</span> valid, u32 low, u32 high);
+<span class="enscript-type">void</span> <span class="enscript-function-name">initialize_list</span>(range_list **list);
+<span class="enscript-type">void</span> <span class="enscript-function-name">add_range</span>(range_list **list, u32 base, u32 len, <span class="enscript-type">int</span> allocate);
+<span class="enscript-type">void</span> <span class="enscript-function-name">print_range_list</span>(range_list *list);
+<span class="enscript-type">void</span> <span class="enscript-function-name">delete_list</span>(range_list *list);
+<span class="enscript-type">void</span> <span class="enscript-function-name">coalesce_list</span>(range_list *list);
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Routines
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">int</span>
+<span class="enscript-function-name">get_block_zero</span>(<span class="enscript-type">void</span>)
+{
+    <span class="enscript-type">int</span> rtn_value;
+    
+    <span class="enscript-keyword">if</span> (the_map != NULL) {
+	b0 = the_map-&gt;misc;
+	rtn_value = 1;
+    } <span class="enscript-keyword">else</span> {
+	<span class="enscript-keyword">if</span> (read_media(the_media, (<span class="enscript-type">long</span> <span class="enscript-type">long</span>) 0, PBLOCK_SIZE, buffer) == 0) {
+	    rtn_value = 0;
+	} <span class="enscript-keyword">else</span> {
+	    b0 = (Block0 *) buffer;
+	    convert_block0(b0, 1);
+	    rtn_value = 1;
+	}
+    }
+    <span class="enscript-keyword">return</span> rtn_value;
+}
+
+
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">get_block_n</span>(<span class="enscript-type">int</span> n)
+{
+    partition_map * entry;
+    <span class="enscript-type">int</span> rtn_value;
+    
+    <span class="enscript-keyword">if</span> (the_map != NULL) {
+	entry = find_entry_by_disk_address(n, the_map);
+	<span class="enscript-keyword">if</span> (entry != 0) {
+	    mb = entry-&gt;data;
+	    rtn_value = 1;
+	} <span class="enscript-keyword">else</span> {
+	    rtn_value = 0;
+	}
+    } <span class="enscript-keyword">else</span> {
+	<span class="enscript-keyword">if</span> (read_media(the_media, ((<span class="enscript-type">long</span> <span class="enscript-type">long</span>) n) * g, PBLOCK_SIZE, (<span class="enscript-type">void</span> *)buffer) == 0) {
+	    rtn_value = 0;
+	} <span class="enscript-keyword">else</span> {
+	    mb = (DPME *) buffer;
+	    convert_dpme(mb, 1);
+	    rtn_value = 1;
+	}
+    }
+    <span class="enscript-keyword">return</span> rtn_value;
+}
+
+
+range_list *
+<span class="enscript-function-name">new_range_list_item</span>(<span class="enscript-type">enum</span> range_state state, <span class="enscript-type">int</span> valid, u32 low, u32 high)
+{
+    range_list *item;
+    
+    item = (range_list *) malloc(<span class="enscript-keyword">sizeof</span>(<span class="enscript-type">struct</span> range_list));
+    item-&gt;next = 0;
+    item-&gt;prev = 0;
+    item-&gt;state = state;
+    item-&gt;valid = valid;
+    item-&gt;start = low;
+    item-&gt;end = high;
+    <span class="enscript-keyword">return</span> item;
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">initialize_list</span>(range_list **list)
+{
+    range_list *item;
+    
+    item = new_range_list_item(kUnallocated, 0, 0, 0xFFFFFFFF);
+    *list = item;
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">delete_list</span>(range_list *list)
+{
+    range_list *item;
+    range_list *cur;
+    
+    <span class="enscript-keyword">for</span> (cur = list; cur != 0; ) {
+	item = cur;
+	cur = cur-&gt;next;
+	free(item);
+    }
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">add_range</span>(range_list **list, u32 base, u32 len, <span class="enscript-type">int</span> allocate)
+{
+    range_list *item;
+    range_list *cur;
+    u32 low;
+    u32 high;
+    
+    <span class="enscript-keyword">if</span> (list == 0 || *list == 0) {
+    	<span class="enscript-comment">/* XXX initialized list will always have one element */</span>
+    	<span class="enscript-keyword">return</span>;
+    }
+    
+    low = base;
+    high = base + len - 1;
+    <span class="enscript-keyword">if</span> (len == 0 || high &lt; len - 1) {
+	<span class="enscript-comment">/* XXX wrapped around */</span>
+	<span class="enscript-keyword">return</span>;
+    }
+
+    cur = *list;
+    <span class="enscript-keyword">while</span> (low &lt;= high) {
+	<span class="enscript-keyword">if</span> (cur == 0) {
+	    <span class="enscript-comment">/* XXX should never occur */</span>
+	    <span class="enscript-keyword">break</span>;
+	}
+	<span class="enscript-keyword">if</span> (low &lt;= cur-&gt;end) {
+	    <span class="enscript-keyword">if</span> (cur-&gt;start &lt; low) {
+		item = new_range_list_item(cur-&gt;state, cur-&gt;valid, cur-&gt;start, low-1);
+		<span class="enscript-comment">/* insert before here */</span>
+		<span class="enscript-keyword">if</span> (cur-&gt;prev == 0) {
+		    item-&gt;prev = 0;
+		    *list = item;
+		} <span class="enscript-keyword">else</span> {
+		    item-&gt;prev = cur-&gt;prev;
+		    item-&gt;prev-&gt;next = item;
+		}
+		cur-&gt;prev = item;
+		item-&gt;next = cur;
+
+		cur-&gt;start = low;
+	    }
+	    <span class="enscript-keyword">if</span> (high &lt; cur-&gt;end) {
+		item = new_range_list_item(cur-&gt;state, cur-&gt;valid, high+1, cur-&gt;end);
+		<span class="enscript-comment">/* insert after here */</span>
+		<span class="enscript-keyword">if</span> (cur-&gt;next == 0) {
+		    item-&gt;next = 0;
+		} <span class="enscript-keyword">else</span> {
+		    item-&gt;next = cur-&gt;next;
+		    item-&gt;next-&gt;prev = item;
+		}
+		cur-&gt;next = item;
+		item-&gt;prev = cur;
+		
+		cur-&gt;end = high;
+	    }
+
+	    <span class="enscript-keyword">if</span> (allocate) {
+		<span class="enscript-keyword">switch</span> (cur-&gt;state) {
+		<span class="enscript-keyword">case</span> <span class="enscript-reference">kUnallocated</span>:
+		    cur-&gt;state = kAllocated;
+		    <span class="enscript-keyword">break</span>;
+		<span class="enscript-keyword">case</span> <span class="enscript-reference">kAllocated</span>:
+		<span class="enscript-keyword">case</span> <span class="enscript-reference">kMultiplyAllocated</span>:
+		    cur-&gt;state = kMultiplyAllocated;
+		    <span class="enscript-keyword">break</span>;
+		}
+	    } <span class="enscript-keyword">else</span> {
+		cur-&gt;valid = 1;
+	    }
+	    low = cur-&gt;end + 1;
+	}
+	cur = cur-&gt;next;
+    }
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">coalesce_list</span>(range_list *list)
+{
+    range_list *cur;
+    range_list *item;
+
+    <span class="enscript-keyword">for</span> (cur = list; cur != 0; ) {
+	item = cur-&gt;next;
+	<span class="enscript-keyword">if</span> (item == 0) {
+	    <span class="enscript-keyword">break</span>;
+	}
+	<span class="enscript-keyword">if</span> (cur-&gt;valid == item-&gt;valid
+		&amp;&amp; cur-&gt;state == item-&gt;state) {
+	    cur-&gt;end = item-&gt;end;
+	    cur-&gt;next = item-&gt;next;
+	    <span class="enscript-keyword">if</span> (item-&gt;next != 0) {
+		item-&gt;next-&gt;prev = cur;
+	    }
+	    free(item);
+	} <span class="enscript-keyword">else</span> {
+	    cur = cur-&gt;next;
+	}
+    }
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">print_range_list</span>(range_list *list)
+{
+    range_list *cur;
+    <span class="enscript-type">int</span> printed;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *s;
+
+    s = NULL;		<span class="enscript-comment">/* XXXGCC -Wuninitialized [powerpc] */</span>
+    
+    <span class="enscript-keyword">if</span> (list == 0) {
+	printf(<span class="enscript-string">&quot;Empty range list\n&quot;</span>);
+	<span class="enscript-keyword">return</span>;
+    }
+    printf(<span class="enscript-string">&quot;Range list:\n&quot;</span>);
+    printed = 0;
+    <span class="enscript-keyword">for</span> (cur = list; cur != 0; cur = cur-&gt;next) {
+	<span class="enscript-keyword">if</span> (cur-&gt;valid) {
+	    <span class="enscript-keyword">switch</span> (cur-&gt;state) {
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">kUnallocated</span>:
+		s = <span class="enscript-string">&quot;unallocated&quot;</span>;
+		<span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">kAllocated</span>:
+		<span class="enscript-keyword">continue</span>;
+		<span class="enscript-comment">//s = &quot;allocated&quot;;
+</span>		<span class="enscript-comment">//break;
+</span>	    <span class="enscript-keyword">case</span> <span class="enscript-reference">kMultiplyAllocated</span>:
+		s = <span class="enscript-string">&quot;multiply allocated&quot;</span>;
+		<span class="enscript-keyword">break</span>;
+	    }
+	    printed = 1;
+	    printf(<span class="enscript-string">&quot;\t%u:%u %s\n&quot;</span>, cur-&gt;start, cur-&gt;end, s);
+	} <span class="enscript-keyword">else</span> {
+	    <span class="enscript-keyword">switch</span> (cur-&gt;state) {
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">kUnallocated</span>:
+		<span class="enscript-keyword">continue</span>;
+		<span class="enscript-comment">//s = &quot;unallocated&quot;;
+</span>		<span class="enscript-comment">//break;
+</span>	    <span class="enscript-keyword">case</span> <span class="enscript-reference">kAllocated</span>:
+		s = <span class="enscript-string">&quot;allocated&quot;</span>;
+		<span class="enscript-keyword">break</span>;
+	    <span class="enscript-keyword">case</span> <span class="enscript-reference">kMultiplyAllocated</span>:
+		s = <span class="enscript-string">&quot;multiply allocated&quot;</span>;
+		<span class="enscript-keyword">break</span>;
+	    }
+	    printed = 1;
+	    printf(<span class="enscript-string">&quot;\t%u:%u out of range, but %s\n&quot;</span>, cur-&gt;start, cur-&gt;end, s);
+	}
+    }
+    <span class="enscript-keyword">if</span> (printed == 0) {
+	printf(<span class="enscript-string">&quot;\tokay\n&quot;</span>);
+    }
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">validate_map</span>(partition_map_header *map)
+{
+    range_list *list;
+    <span class="enscript-type">char</span> *name;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> i;
+    u32 limit;
+    <span class="enscript-type">int</span> printed;
+    
+    <span class="enscript-comment">//printf(&quot;Validation not implemented yet.\n&quot;);
+</span>    
+    <span class="enscript-keyword">if</span> (map == NULL) {
+    	the_map = 0;
+	<span class="enscript-keyword">if</span> (get_string_argument(<span class="enscript-string">&quot;Name of device: &quot;</span>, &amp;name, 1) == 0) {
+	    bad_input(<span class="enscript-string">&quot;Bad name&quot;</span>);
+	    <span class="enscript-keyword">return</span>;
+	}
+	the_media = open_pathname_as_media(name, O_RDONLY);
+	<span class="enscript-keyword">if</span> (the_media == 0) {
+	    error(errno, <span class="enscript-string">&quot;can't open file '%s'&quot;</span>, name);
+	    free(name);
+	    <span class="enscript-keyword">return</span>;
+	}
+	g = media_granularity(the_media);
+	<span class="enscript-keyword">if</span> (g &lt; PBLOCK_SIZE) {
+	    g = PBLOCK_SIZE;
+	}
+   	the_media = open_deblock_media(PBLOCK_SIZE, the_media);
+
+	buffer = malloc(PBLOCK_SIZE);
+	<span class="enscript-keyword">if</span> (buffer == NULL) {
+	    error(errno, <span class="enscript-string">&quot;can't allocate memory for disk buffer&quot;</span>);
+	    <span class="enscript-keyword">goto</span> <span class="enscript-reference">done</span>;
+	}
+
+    } <span class="enscript-keyword">else</span> {
+    	name = 0;
+	the_map = map;
+	g = map-&gt;logical_block;
+    }
+
+    initialize_list(&amp;list);
+
+    <span class="enscript-comment">// get block 0
+</span>    <span class="enscript-keyword">if</span> (get_block_zero() == 0) {
+	printf(<span class="enscript-string">&quot;unable to read block 0\n&quot;</span>);
+	<span class="enscript-keyword">goto</span> <span class="enscript-reference">check_map</span>;
+    }
+    <span class="enscript-comment">// XXX signature valid
+</span>    <span class="enscript-comment">// XXX size &amp; count match DeviceCapacity
+</span>    <span class="enscript-comment">// XXX number of descriptors matches array size
+</span>    <span class="enscript-comment">// XXX each descriptor wholly contained in a partition
+</span>    <span class="enscript-comment">// XXX the range below here is in physical blocks but the map is in logical blocks!!!
+</span>    add_range(&amp;list, 1, b0-&gt;sbBlkCount-1, 0);	<span class="enscript-comment">/* subtract one since args are base &amp; len */</span>
+
+<span class="enscript-reference">check_map</span>:
+    <span class="enscript-comment">// compute size of map
+</span>    <span class="enscript-keyword">if</span> (map != NULL) {
+	limit = the_map-&gt;blocks_in_map;
+    } <span class="enscript-keyword">else</span> {
+	<span class="enscript-keyword">if</span> (get_block_n(1) == 0) {
+	    printf(<span class="enscript-string">&quot;unable to get first block\n&quot;</span>);
+	    <span class="enscript-keyword">goto</span> <span class="enscript-reference">done</span>;
+	} <span class="enscript-keyword">else</span> {
+	    <span class="enscript-keyword">if</span> (mb-&gt;dpme_signature != DPME_SIGNATURE) {
+	        limit = -1;
+	    } <span class="enscript-keyword">else</span> {
+		limit = mb-&gt;dpme_map_entries;
+	    }
+	}
+    }
+
+    <span class="enscript-comment">// for each entry
+</span>    <span class="enscript-keyword">for</span> (i = 1; ; i++) {
+#<span class="enscript-reference">if</span> 0
+	<span class="enscript-keyword">if</span> (limit &lt; 0) {
+	    <span class="enscript-comment">/* XXX what to use for end of list? */</span>
+	    <span class="enscript-keyword">if</span> (i &gt; 5) {
+	    	<span class="enscript-keyword">break</span>;
+	    }
+	} <span class="enscript-keyword">else</span>
+#<span class="enscript-reference">endif</span>
+	<span class="enscript-keyword">if</span> (i &gt; limit) {
+	    <span class="enscript-keyword">break</span>;
+	}
+
+	printf(<span class="enscript-string">&quot;block %d:\n&quot;</span>, i);
+
+	<span class="enscript-comment">// get entry
+</span>	<span class="enscript-keyword">if</span> (get_block_n(i) == 0) {
+	    printf(<span class="enscript-string">&quot;\tunable to get\n&quot;</span>);
+	    <span class="enscript-keyword">goto</span> <span class="enscript-reference">post_processing</span>;
+	}
+	printed = 0;
+	
+	<span class="enscript-comment">// signature matches
+</span>	<span class="enscript-keyword">if</span> (mb-&gt;dpme_signature != DPME_SIGNATURE) {
+	    printed = 1;
+	    printf(<span class="enscript-string">&quot;\tsignature is 0x%x, should be 0x%x\n&quot;</span>, mb-&gt;dpme_signature, DPME_SIGNATURE);
+	}
+	<span class="enscript-comment">// reserved1 == 0
+</span>	<span class="enscript-keyword">if</span> (mb-&gt;dpme_reserved_1 != 0) {
+	    printed = 1;
+	    printf(<span class="enscript-string">&quot;\treserved word is 0x%x, should be 0\n&quot;</span>, mb-&gt;dpme_reserved_1);
+	}
+	<span class="enscript-comment">// entry count matches
+</span>#<span class="enscript-reference">if</span> 0
+	<span class="enscript-keyword">if</span> (limit &lt; 0) {
+	    printed = 1;
+	    printf(<span class="enscript-string">&quot;\tentry count is 0x%lx, real value unknown\n&quot;</span>, mb-&gt;dpme_map_entries);
+	} <span class="enscript-keyword">else</span>
+#<span class="enscript-reference">endif</span>
+	<span class="enscript-keyword">if</span> (mb-&gt;dpme_map_entries != limit) {
+	    printed = 1;
+	    printf(<span class="enscript-string">&quot;\tentry count is 0x%x, should be %d\n&quot;</span>, mb-&gt;dpme_map_entries, limit);
+	}
+	<span class="enscript-comment">// lblocks contained within physical
+</span>	<span class="enscript-keyword">if</span> (mb-&gt;dpme_lblock_start &gt;= mb-&gt;dpme_pblocks
+		|| mb-&gt;dpme_lblocks &gt; mb-&gt;dpme_pblocks - mb-&gt;dpme_lblock_start) {
+	    printed = 1;
+	    printf(<span class="enscript-string">&quot;\tlogical blocks (%d for %d) not within physical size (%d)\n&quot;</span>,
+		    mb-&gt;dpme_lblock_start, mb-&gt;dpme_lblocks, mb-&gt;dpme_pblocks);
+	}
+	<span class="enscript-comment">// remember stuff for post processing
+</span>	add_range(&amp;list, mb-&gt;dpme_pblock_start, mb-&gt;dpme_pblocks, 1);
+	
+	<span class="enscript-comment">// XXX type is known type?
+</span>	<span class="enscript-comment">// XXX no unknown flags?
+</span>	<span class="enscript-comment">// XXX boot blocks either within or outside of logical
+</span>	<span class="enscript-comment">// XXX checksum matches contents
+</span>	<span class="enscript-comment">// XXX other fields zero if boot_bytes  is zero
+</span>	<span class="enscript-comment">// XXX processor id is known value?
+</span>	<span class="enscript-comment">// XXX no data in reserved3
+</span>	<span class="enscript-keyword">if</span> (printed == 0) {
+	    printf(<span class="enscript-string">&quot;\tokay\n&quot;</span>);
+	}
+    }
+
+<span class="enscript-reference">post_processing</span>:
+    <span class="enscript-comment">// properties of whole map
+</span>    
+    <span class="enscript-comment">// every block on disk in one &amp; only one partition
+</span>    coalesce_list(list);
+    print_range_list(list);
+    <span class="enscript-comment">// there is a partition for the map
+</span>    <span class="enscript-comment">// map fits within partition that contains it
+</span>    
+    <span class="enscript-comment">// try to detect 512/2048 mixed partition map?
+</span>
+<span class="enscript-reference">done</span>:
+    <span class="enscript-keyword">if</span> (map == NULL) {
+	close_media(the_media);
+	free(buffer);
+	free(name);
+    }
+}
+</pre>
+<hr />
+</body></html>

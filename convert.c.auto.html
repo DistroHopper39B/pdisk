@@ -1,0 +1,233 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>convert.c</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">convert.c&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="convert.c">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// convert.c - Little-endian conversion
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// Written by Eryk Vershen
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// See comments in convert.h
+</span><span class="enscript-comment">//
+</span>
+<span class="enscript-comment">/*
+ * Copyright 1996,1997,1998 by Apple Computer, Inc.
+ *              All Rights Reserved 
+ *  
+ * Permission to use, copy, modify, and distribute this software and 
+ * its documentation for any purpose and without fee is hereby granted, 
+ * provided that the above copyright notice appears in all copies and 
+ * that both the copyright notice and this permission notice appear in 
+ * supporting documentation. 
+ *  
+ * APPLE COMPUTER DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+ * FOR A PARTICULAR PURPOSE. 
+ *  
+ * IN NO EVENT SHALL APPLE COMPUTER BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+ * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
+ * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
+ * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+ */</span>
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__linux__</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;endian.h&gt;</span>
+#<span class="enscript-reference">else</span>
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__unix__</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;machine/endian.h&gt;</span>
+#<span class="enscript-reference">else</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">LITTLE_ENDIAN</span> 1234
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">BIG_ENDIAN</span> 4321
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">BYTE_ORDER</span> 4321
+<span class="enscript-comment">//#define BYTE_ORDER 1234
+</span>#<span class="enscript-reference">endif</span>
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;convert.h&quot;</span>
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Defines
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Types
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Constants
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Global Variables
+</span><span class="enscript-comment">//
+</span>
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Forward declarations
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">void</span> <span class="enscript-function-name">reverse2</span>(u8 *bytes);
+<span class="enscript-type">void</span> <span class="enscript-function-name">reverse4</span>(u8 *bytes);
+
+
+<span class="enscript-comment">//
+</span><span class="enscript-comment">// Routines
+</span><span class="enscript-comment">//
+</span><span class="enscript-type">int</span>
+<span class="enscript-function-name">convert_dpme</span>(DPME *data, <span class="enscript-type">int</span> to_cpu_form)
+{
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">BYTE_ORDER</span> == <span class="enscript-variable-name">LITTLE_ENDIAN</span>
+    <span class="enscript-comment">// Since we will toss the block if the signature doesn't match
+</span>    <span class="enscript-comment">// we don't need to check the signature down here.
+</span>    reverse2((u8 *)&amp;data-&gt;dpme_signature);
+    reverse2((u8 *)&amp;data-&gt;dpme_reserved_1);
+    reverse4((u8 *)&amp;data-&gt;dpme_map_entries);
+    reverse4((u8 *)&amp;data-&gt;dpme_pblock_start);
+    reverse4((u8 *)&amp;data-&gt;dpme_pblocks);
+    reverse4((u8 *)&amp;data-&gt;dpme_lblock_start);
+    reverse4((u8 *)&amp;data-&gt;dpme_lblocks);
+    reverse4((u8 *)&amp;data-&gt;dpme_flags);
+    reverse4((u8 *)&amp;data-&gt;dpme_boot_block);
+    reverse4((u8 *)&amp;data-&gt;dpme_boot_bytes);
+    reverse4((u8 *)&amp;data-&gt;dpme_load_addr);
+    reverse4((u8 *)&amp;data-&gt;dpme_load_addr_2);
+    reverse4((u8 *)&amp;data-&gt;dpme_goto_addr);
+    reverse4((u8 *)&amp;data-&gt;dpme_goto_addr_2);
+    reverse4((u8 *)&amp;data-&gt;dpme_checksum);
+    convert_bzb((BZB *)data-&gt;dpme_bzb, to_cpu_form);
+#<span class="enscript-reference">endif</span>
+    <span class="enscript-keyword">return</span> 0;
+}
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">BYTE_ORDER</span> == <span class="enscript-variable-name">LITTLE_ENDIAN</span>
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">convert_bzb</span>(BZB *data, <span class="enscript-type">int</span> to_cpu_form)
+{
+    <span class="enscript-comment">// Since the data here varies according to the type of partition we
+</span>    <span class="enscript-comment">// do not want to convert willy-nilly. We use the flag to determine
+</span>    <span class="enscript-comment">// whether to check for the signature before or after we flip the bytes.
+</span>    <span class="enscript-keyword">if</span> (to_cpu_form) {
+	reverse4((u8 *)&amp;data-&gt;bzb_magic);
+	<span class="enscript-keyword">if</span> (data-&gt;bzb_magic != BZBMAGIC) {
+	    reverse4((u8 *)&amp;data-&gt;bzb_magic);
+	    <span class="enscript-keyword">if</span> (data-&gt;bzb_magic != BZBMAGIC) {
+		<span class="enscript-keyword">return</span> 0;
+	    }
+	}
+    } <span class="enscript-keyword">else</span> {
+	<span class="enscript-keyword">if</span> (data-&gt;bzb_magic != BZBMAGIC) {
+	    <span class="enscript-keyword">return</span> 0;
+	}
+	reverse4((u8 *)&amp;data-&gt;bzb_magic);
+    }
+    reverse2((u8 *)&amp;data-&gt;bzb_inode);
+    reverse4((u8 *)&amp;data-&gt;bzb_flags);
+    reverse4((u8 *)&amp;data-&gt;bzb_tmade);
+    reverse4((u8 *)&amp;data-&gt;bzb_tmount);
+    reverse4((u8 *)&amp;data-&gt;bzb_tumount);
+    <span class="enscript-keyword">return</span> 0;
+}
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-type">int</span>
+<span class="enscript-function-name">convert_block0</span>(Block0 *data, <span class="enscript-type">int</span> to_cpu_form)
+{
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">BYTE_ORDER</span> == <span class="enscript-variable-name">LITTLE_ENDIAN</span>
+    DDMap *m;
+    u16 count;
+    <span class="enscript-type">int</span> i;
+
+    <span class="enscript-comment">// Since this data is optional we do not want to convert willy-nilly.
+</span>    <span class="enscript-comment">// We use the flag to determine whether to check for the signature
+</span>    <span class="enscript-comment">// before or after we flip the bytes and to determine which form of
+</span>    <span class="enscript-comment">// the count to use.
+</span>    <span class="enscript-keyword">if</span> (to_cpu_form) {
+	reverse2((u8 *)&amp;data-&gt;sbSig);
+	<span class="enscript-keyword">if</span> (data-&gt;sbSig != BLOCK0_SIGNATURE) {
+	    reverse2((u8 *)&amp;data-&gt;sbSig);
+	    <span class="enscript-keyword">if</span> (data-&gt;sbSig != BLOCK0_SIGNATURE) {
+		<span class="enscript-keyword">return</span> 0;
+	    }
+	}
+    } <span class="enscript-keyword">else</span> {
+	<span class="enscript-keyword">if</span> (data-&gt;sbSig != BLOCK0_SIGNATURE) {
+	    <span class="enscript-keyword">return</span> 0;
+	}
+	reverse2((u8 *)&amp;data-&gt;sbSig);
+    }
+    reverse2((u8 *)&amp;data-&gt;sbBlkSize);
+    reverse4((u8 *)&amp;data-&gt;sbBlkCount);
+    reverse2((u8 *)&amp;data-&gt;sbDevType);
+    reverse2((u8 *)&amp;data-&gt;sbDevId);
+    reverse4((u8 *)&amp;data-&gt;sbData);
+    <span class="enscript-keyword">if</span> (to_cpu_form) {
+	reverse2((u8 *)&amp;data-&gt;sbDrvrCount);
+	count = data-&gt;sbDrvrCount;
+    } <span class="enscript-keyword">else</span> {
+	count = data-&gt;sbDrvrCount;
+	reverse2((u8 *)&amp;data-&gt;sbDrvrCount);
+    }
+
+    <span class="enscript-keyword">if</span> (count &gt; 0) {
+	m = (DDMap *) data-&gt;sbMap;
+	<span class="enscript-keyword">for</span> (i = 0; i &lt; count; i++) {
+	    reverse4((u8 *)&amp;m[i].ddBlock);
+	    reverse2((u8 *)&amp;m[i].ddSize);
+	    reverse2((u8 *)&amp;m[i].ddType);
+	}
+    }
+#<span class="enscript-reference">endif</span>
+    <span class="enscript-keyword">return</span> 0;
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">reverse2</span>(u8 *bytes)
+{
+    u8 t;
+
+    t = *bytes;
+    *bytes = bytes[1];
+    bytes[1] = t;
+}
+
+
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">reverse4</span>(u8 *bytes)
+{
+    u8 t;
+
+    t = *bytes;
+    *bytes = bytes[3];
+    bytes[3] = t;
+    t = bytes[1];
+    bytes[1] = bytes[2];
+    bytes[2] = t;
+}
+</pre>
+<hr />
+</body></html>

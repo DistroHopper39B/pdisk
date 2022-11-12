@@ -1,0 +1,445 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>MacSCSICommand.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">MacSCSICommand.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="MacSCSICommand.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+    File:       MacSCSICommand.h
+
+    Contains:   SCSI specific definitions.
+
+    Written by: Martin Minow
+
+*/</span>
+
+<span class="enscript-comment">/*
+ * Copyright 1995, 1997 by Apple Computer, Inc.
+ *              All Rights Reserved 
+ *  
+ * Permission to use, copy, modify, and distribute this software and 
+ * its documentation for any purpose and without fee is hereby granted, 
+ * provided that the above copyright notice appears in all copies and 
+ * that both the copyright notice and this permission notice appear in 
+ * supporting documentation. 
+ *  
+ * APPLE COMPUTER DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+ * FOR A PARTICULAR PURPOSE. 
+ *  
+ * IN NO EVENT SHALL APPLE COMPUTER BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+ * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
+ * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
+ * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+ */</span>
+
+<span class="enscript-comment">/*
+ * Scsi-specific definitions.
+ */</span>
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__MacSCSICommand__</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">__MacSCSICommand__</span>
+
+<span class="enscript-comment">/*
+ * The 6-byte commands are used for most simple
+ * I/O requests.
+ */</span>
+<span class="enscript-type">struct</span> SCSI_6_Byte_Command {                <span class="enscript-comment">/* Six-byte command         */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       opcode;             <span class="enscript-comment">/*  0                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn3;               <span class="enscript-comment">/*  1 lbn in low 5          */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn2;               <span class="enscript-comment">/*  2                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn1;               <span class="enscript-comment">/*  3                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       len;                <span class="enscript-comment">/*  4                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       ctrl;               <span class="enscript-comment">/*  5                       */</span>
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> SCSI_6_Byte_Command SCSI_6_Byte_Command;
+
+<span class="enscript-type">struct</span> SCSI_10_Byte_Command {               <span class="enscript-comment">/* Ten-byte command         */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       opcode;             <span class="enscript-comment">/*  0                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lun;                <span class="enscript-comment">/*  1                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn4;               <span class="enscript-comment">/*  2                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn3;               <span class="enscript-comment">/*  3                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn2;               <span class="enscript-comment">/*  4                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn1;               <span class="enscript-comment">/*  5                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       pad;                <span class="enscript-comment">/*  6                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       len2;               <span class="enscript-comment">/*  7                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       len1;               <span class="enscript-comment">/*  8                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       ctrl;               <span class="enscript-comment">/*  9                       */</span>
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> SCSI_10_Byte_Command SCSI_10_Byte_Command;
+
+<span class="enscript-type">struct</span> SCSI_12_Byte_Command {               <span class="enscript-comment">/* Twelve-byte command      */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       opcode;             <span class="enscript-comment">/*  0                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lun;                <span class="enscript-comment">/*  1                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn4;               <span class="enscript-comment">/*  2                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn3;               <span class="enscript-comment">/*  3                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn2;               <span class="enscript-comment">/*  4                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn1;               <span class="enscript-comment">/*  5                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       len4;               <span class="enscript-comment">/*  6                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       len3;               <span class="enscript-comment">/*  7                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       len2;               <span class="enscript-comment">/*  8                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       len1;               <span class="enscript-comment">/*  9                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       pad;                <span class="enscript-comment">/* 10                       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       ctrl;               <span class="enscript-comment">/* 11                       */</span>
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> SCSI_12_Byte_Command SCSI_12_Byte_Command;
+
+<span class="enscript-comment">/*
+ * This union defines all scsi commands.
+ */</span>
+<span class="enscript-type">union</span> SCSI_Command {
+    SCSI_6_Byte_Command     scsi6;
+    SCSI_10_Byte_Command    scsi10;
+    SCSI_12_Byte_Command    scsi12;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>           scsi[12];
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">union</span> SCSI_Command SCSI_Command, *SCSI_CommandPtr;
+
+<span class="enscript-comment">/*
+ * Returned by a read-capacity command.
+ */</span>
+<span class="enscript-type">struct</span> SCSI_Capacity_Data {
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn4;               <span class="enscript-comment">/* Number                   */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn3;               <span class="enscript-comment">/*  of                      */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn2;               <span class="enscript-comment">/*   logical                */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       lbn1;               <span class="enscript-comment">/*    blocks                */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       len4;               <span class="enscript-comment">/* Length                   */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       len3;               <span class="enscript-comment">/*  of each                 */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       len2;               <span class="enscript-comment">/*   logical block          */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       len1;               <span class="enscript-comment">/*    in bytes              */</span>
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> SCSI_Capacity_Data SCSI_Capacity_Data;
+
+<span class="enscript-type">struct</span> SCSI_Inquiry_Data {                  <span class="enscript-comment">/* Inquiry returns this     */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       devType;            <span class="enscript-comment">/*  0 Device type,          */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       devTypeMod;         <span class="enscript-comment">/*  1 Device type modifier  */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       version;            <span class="enscript-comment">/*  2 ISO/ECMA/ANSI version */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       format;             <span class="enscript-comment">/*  3 Response data format  */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       length;             <span class="enscript-comment">/*  4 Additional Length     */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       reserved5;          <span class="enscript-comment">/*  5 Reserved              */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       reserved6;          <span class="enscript-comment">/*  6 Reserved              */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       flags;              <span class="enscript-comment">/*  7 Capability flags      */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       vendor[8];          <span class="enscript-comment">/*  8-15 Vendor-specific    */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       product[16];        <span class="enscript-comment">/* 16-31 Product id         */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       revision[4];        <span class="enscript-comment">/* 32-35 Product revision   */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       vendorSpecific[20]; <span class="enscript-comment">/* 36-55 Vendor stuff       */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       moreReserved[40];   <span class="enscript-comment">/* 56-95 Reserved           */</span>
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> SCSI_Inquiry_Data SCSI_Inquiry_Data;
+
+<span class="enscript-comment">/*
+ * This bit may be set in SCSI_Inquiry_Data.devTypeMod
+ */</span>
+<span class="enscript-type">enum</span> {
+    kScsiInquiryRMB = 0x80                  <span class="enscript-comment">/* Removable medium if set  */</span>
+};
+<span class="enscript-comment">/*
+ * These bits may be set in SCSI_Inquiry_Data.flags
+ */</span>
+<span class="enscript-type">enum</span> {
+    kScsiInquiryRelAdr  = 0x80,             <span class="enscript-comment">/* Has relative addressing  */</span>
+    kScsiInquiryWBus32  = 0x40,             <span class="enscript-comment">/* Wide (32-bit) transfers  */</span>
+    kScsiInquiryWBus16  = 0x20,             <span class="enscript-comment">/* Wide (16-bit) transfers  */</span>
+    kScsiInquirySync    = 0x10,             <span class="enscript-comment">/* Synchronous transfers    */</span>
+    kScsiInquiryLinked  = 0x08,             <span class="enscript-comment">/* Linked commands ok       */</span>
+    kScsiInquiryReserved = 0x04,
+    kScsiInquiryCmdQue  = 0x02,             <span class="enscript-comment">/* Tagged cmd queuing ok    */</span>
+    kScsiInquirySftRe   = 0x01              <span class="enscript-comment">/* Soft reset alternative   */</span>
+};
+
+<span class="enscript-comment">/*
+ * These bits may be set in SCSI_Inquiry_Data.devType
+ */</span>
+<span class="enscript-type">enum</span> {
+    kScsiDevTypeDirect                  = 0,
+    kScsiDevTypeSequential,
+    kScsiDevTypePrinter,
+    kScsiDevTypeProcessor,
+    kScsiDevTypeWorm,                       <span class="enscript-comment">/* Write-once, read mult    */</span>
+    kScsiDevTypeCDROM,
+    kScsiDevTypeScanner,
+    kScsiDevTypeOptical,
+    kScsiDevTypeChanger,
+    kScsiDevTypeComm,
+    kScsiDevTypeGraphicArts0A,
+    kScsiDevTypeGraphicArts0B,
+    kScsiDevTypeFirstReserved,              <span class="enscript-comment">/* Reserved sequence start  */</span>
+    kScsiDevTypeUnknownOrMissing        = 0x1F,
+    kScsiDevTypeMask                    = 0x1F
+};
+<span class="enscript-comment">/*
+ * These are device type qualifiers. We need them to distinguish between &quot;unknown&quot;
+ * and &quot;missing&quot; devices.
+ */</span>
+<span class="enscript-type">enum</span> {
+    kScsiDevTypeQualifierConnected      = 0x00, <span class="enscript-comment">/* Exists and is connected      */</span>
+    kScsiDevTypeQualifierNotConnected   = 0x20, <span class="enscript-comment">/* Logical unit exists          */</span>
+    kScsiDevTypeQualifierReserved       = 0x40,
+    kScsiDevTypeQualifierMissing        = 0x60, <span class="enscript-comment">/* No such logical unit         */</span>
+    kScsiDevTypeQualifierVendorSpecific = 0x80, <span class="enscript-comment">/* Other bits are unspecified   */</span>
+    kScsiDevTypeQualifierMask           = 0xE0
+};
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiDevTypeMissing</span> \
+    (kScsiDevTypeUnknownOrMissing | kScsiDevTypeQualifierMissing)
+
+<span class="enscript-comment">/*
+ * This is the data that is returned after a GetExtendedStatus
+ * request. The errorCode gives a general indication of the error,
+ * which may be qualified by the additionalSenseCode and
+ * additionalSenseQualifier fields. These may be device (vendor)
+ * specific values, however. The info[] field contains additional
+ * information. For a media error, it contains the failing
+ * logical block number (most-significant byte first).
+ */</span>
+<span class="enscript-type">struct</span> SCSI_Sense_Data {                <span class="enscript-comment">/* Request Sense result         */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       errorCode;      <span class="enscript-comment">/*  0   Class code, valid lbn   */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       segmentNumber;  <span class="enscript-comment">/*  1   Segment number          */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       senseKey;       <span class="enscript-comment">/*  2   Sense key and flags     */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       info[4];
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       additionalSenseLength;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       reservedForCopy[4];
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       additionalSenseCode;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       additionalSenseQualifier;   
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       fruCode;        <span class="enscript-comment">/* Field replacable unit code   */</span>
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       senseKeySpecific[2];
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       additional[101];
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> SCSI_Sense_Data SCSI_Sense_Data;
+<span class="enscript-comment">/*
+ * The high-bit of errorCode signals whether there is a logical
+ * block. The low value signals whether there is a valid sense
+ */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiSenseHasLBN</span>            0x80    <span class="enscript-comment">/* Logical block number set */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiSenseInfoValid</span>         0x70    <span class="enscript-comment">/* Is sense key valid?      */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiSenseInfoMask</span>          0x70    <span class="enscript-comment">/* Mask for sense info      */</span>
+<span class="enscript-comment">/*
+ * These bits may be set in the sense key
+ */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiSenseKeyMask</span>           0x0F
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiSenseILI</span>               0x20    <span class="enscript-comment">/* Illegal logical Length   */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiSenseEOM</span>               0x40    <span class="enscript-comment">/* End of media             */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiSenseFileMark</span>          0x80    <span class="enscript-comment">/* End of file mark         */</span>
+
+<span class="enscript-comment">/*
+ * SCSI sense codes. (Returned after request sense).
+ */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseNone</span>             0x00    <span class="enscript-comment">/* No error                 */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseRecoveredErr</span>     0x01    <span class="enscript-comment">/* Warning                  */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseNotReady</span>         0x02    <span class="enscript-comment">/* Device not ready         */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseMediumErr</span>        0x03    <span class="enscript-comment">/* Device medium error      */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseHardwareErr</span>      0x04    <span class="enscript-comment">/* Device hardware error    */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseIllegalReq</span>       0x05    <span class="enscript-comment">/* Illegal request for dev. */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseUnitAtn</span>          0x06    <span class="enscript-comment">/* Unit attention (not err) */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseDataProtect</span>      0x07    <span class="enscript-comment">/* Data protection          */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseBlankCheck</span>       0x08    <span class="enscript-comment">/* Tape-specific error      */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseVendorSpecific</span>   0x09    <span class="enscript-comment">/* Vendor-specific error    */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseCopyAborted</span>      0x0a    <span class="enscript-comment">/* Copy request cancelled   */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseAbortedCmd</span>       0x0b    <span class="enscript-comment">/* Initiator aborted cmd.   */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseEqual</span>            0x0c    <span class="enscript-comment">/* Comparison equal         */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseVolumeOverflow</span>   0x0d    <span class="enscript-comment">/* Write past end mark      */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseMiscompare</span>       0x0e    <span class="enscript-comment">/* Comparison failed        */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseCurrentErr</span>       0x70
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiSenseDeferredErr</span>      0x71
+
+<span class="enscript-comment">/*
+ * Mode sense parameter header
+ */</span>
+<span class="enscript-type">struct</span> SCSI_ModeParamHeader {
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       modeDataLength;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       mediumType;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       deviceSpecific;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       blockDescriptorLength;
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> SCSI_ModeParamHeader SCSI_ModeParamHeader;
+
+<span class="enscript-type">struct</span> SCSI_ModeParamBlockDescriptor {
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       densityCode;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       numberOfBlocks[3];
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       reserved;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       blockLength[3];
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> SCSI_ModeParamBlockDescriptor SCSI_ModeParamBlockDescriptor;
+
+<span class="enscript-type">union</span> SCSI_ModeParamPage {
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       data[1];
+    <span class="enscript-type">struct</span> {
+	<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>   code;
+	<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>   length;
+    } page;
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">union</span> SCSI_ModeParamPage SCSI_ModeParamPage;
+
+<span class="enscript-comment">/*
+ * LogSense parameter header
+ */</span>
+<span class="enscript-type">struct</span> SCSI_LogSenseParamHeader {
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       pageCode;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       reserved;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       pageLength[2];
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> SCSI_LogSenseParamHeader SCSI_LogSenseParamHeader;
+
+<span class="enscript-comment">/*
+ * Log parameter pages are variable-length with a fixed length header.
+ */</span>
+<span class="enscript-type">union</span> SCSI_LogSenseParamPage {
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>       data[1];
+    <span class="enscript-type">struct</span> {
+	<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>   parameterCode[2];
+	<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>   flags;
+	<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>   parameterLength;
+    } page;
+};
+<span class="enscript-type">typedef</span> <span class="enscript-type">union</span> SCSI_LogSenseParamPage SCSI_LogSenseParamPage;
+
+<span class="enscript-comment">/*
+ * SCSI command status (from status phase)
+ */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiStatusGood</span>            0x00    <span class="enscript-comment">/* Normal completion        */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiStatusCheckCondition</span>  0x02    <span class="enscript-comment">/* Need GetExtendedStatus   */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiStatusConditionMet</span>    0x04
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiStatusBusy</span>            0x08    <span class="enscript-comment">/* Device busy (self-test?) */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiStatusIntermediate</span>    0x10    <span class="enscript-comment">/* Intermediate status      */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiStatusResConflict</span>     0x18    <span class="enscript-comment">/* Reservation conflict     */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiStatusQueueFull</span>       0x28    <span class="enscript-comment">/* Target can't do command  */</span>
+#<span class="enscript-reference">define</span>  <span class="enscript-variable-name">kScsiStatusReservedMask</span>    0x3e    <span class="enscript-comment">/* Vendor specific?         */</span>
+
+<span class="enscript-comment">/*
+ * SCSI command codes. Commands defined as ...6, ...10, ...12, are
+ * six-byte, ten-byte, and twelve-byte variants of the indicated command.
+ */</span>
+<span class="enscript-comment">/*
+ * These commands are supported for all devices.
+ */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdChangeDefinition</span>    0x40
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdCompare</span>             0x39
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdCopy</span>                0x18
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdCopyAndVerify</span>       0x3a
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdInquiry</span>             0x12
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdLogSelect</span>           0x4c
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdLogSense</span>            0x4d
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdModeSelect10</span>        0x55
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdModeSelect6</span>         0x15
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdModeSense10</span>         0x5a
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdModeSense6</span>          0x1a
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdReadBuffer</span>          0x3c
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdRecvDiagResult</span>      0x1c
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdRequestSense</span>        0x03
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdSendDiagnostic</span>      0x1d
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdTestUnitReady</span>       0x00
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdWriteBuffer</span>         0x3b
+
+<span class="enscript-comment">/*
+ * These commands are supported by direct-access devices only.
+ */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdFormatUnit</span>          0x04
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kSCSICmdCopy</span>                0x18
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kSCSICmdCopyAndVerify</span>       0x3a
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdLockUnlockCache</span>     0x36
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdPrefetch</span>            0x34
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdPreventAllowRemoval</span> 0x1e
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdRead6</span>               0x08
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdRead10</span>              0x28
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdReadCapacity</span>        0x25
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdReadDefectData</span>      0x37
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdReadLong</span>            0x3e
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdReassignBlocks</span>      0x07
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdRelease</span>             0x17
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdReserve</span>             0x16
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdRezeroUnit</span>          0x01
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdSearchDataEql</span>       0x31
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdSearchDataHigh</span>      0x30
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdSearchDataLow</span>       0x32
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdSeek6</span>               0x0b
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdSeek10</span>              0x2b
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdSetLimits</span>           0x33
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdStartStopUnit</span>       0x1b
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdSynchronizeCache</span>    0x35
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdVerify</span>              0x2f
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdWrite6</span>              0x0a
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdWrite10</span>             0x2a
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdWriteAndVerify</span>      0x2e
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdWriteLong</span>           0x3f
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdWriteSame</span>           0x41
+
+<span class="enscript-comment">/*
+ * These commands are supported by sequential devices.
+ */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdRewind</span>              0x01
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdWriteFilemarks</span>      0x10
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdSpace</span>               0x11
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdLoadUnload</span>          0x1B
+<span class="enscript-comment">/*
+ * ANSI SCSI-II for CD-ROM devices.
+ */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiCmdReadCDTableOfContents</span>   0x43
+
+<span class="enscript-comment">/*
+ * Message codes (for Msg In and Msg Out phases).
+ */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgAbort</span>               0x06
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgAbortTag</span>            0x0d
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgBusDeviceReset</span>      0x0c
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgClearQueue</span>          0x0e
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgCmdComplete</span>         0x00
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgDisconnect</span>          0x04
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgIdentify</span>            0x80
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgIgnoreWideResdue</span>    0x23
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgInitiateRecovery</span>    0x0f
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgInitiatorDetectedErr</span> 0x05
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgLinkedCmdComplete</span>   0x0a
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgLinkedCmdCompleteFlag</span> 0x0b
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgParityErr</span>           0x09
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgRejectMsg</span>           0x07
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgModifyDataPtr</span>       0x00 <span class="enscript-comment">/* Extended msg        */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgNop</span>                 0x08
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgHeadOfQueueTag</span>      0x21 <span class="enscript-comment">/* Two byte msg        */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgOrderedQueueTag</span>     0x22 <span class="enscript-comment">/* Two byte msg        */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgSimpleQueueTag</span>      0x20 <span class="enscript-comment">/* Two byte msg        */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgReleaseRecovery</span>     0x10
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgRestorePointers</span>     0x03
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgSaveDataPointers</span>    0x02
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgSyncXferReq</span>         0x01 <span class="enscript-comment">/* Extended msg        */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgWideDataXferReq</span>     0x03 <span class="enscript-comment">/* Extended msg        */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgTerminateIOP</span>        0x11
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgExtended</span>            0x01
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgEnableDisconnectMask</span> 0x40
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgTwoByte</span>             0x20
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgTwoByteMin</span>          0x20
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiMsgTwoByteMax</span>          0x2f
+
+<span class="enscript-comment">/*
+ * Default timeout times for SCSI commands (times are in Msec).
+ */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiNormalCompletionTime</span>   (500L)          <span class="enscript-comment">/* 1/2 second               */</span>
+<span class="enscript-comment">/*
+ * Dratted DAT tape.
+ */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiDATCompletionTime</span>      (60L * 1000L);  <span class="enscript-comment">/* One minute               */</span>
+<span class="enscript-comment">/*
+ * Yes, we do allow 90 seconds for spin-up of those dratted tape drives.
+ */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kScsiSpinUpCompletionTime</span>   (90L * 1000L)
+
+
+#<span class="enscript-reference">endif</span> <span class="enscript-comment">/* __MacSCSICommand__ */</span>
+</pre>
+<hr />
+</body></html>
