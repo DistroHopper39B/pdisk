@@ -1,5 +1,5 @@
 # pdisk
-Apple Partition Map editor for Linux (patched)
+Apple Partition Map editor for Unix-like systems. Made by Apple in 1998.
 
 ## Compiling
 ```
